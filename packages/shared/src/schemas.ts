@@ -50,6 +50,11 @@ export const otpVerifySchema = z.strictObject({
   code: otpCodeSchema,
   name: name.optional(),
 });
+export const registerSchema = z.strictObject({
+  phone: phoneSchema,
+  name,
+  password: passwordSchema,
+});
 export const loginSchema = z.strictObject({
   phone: phoneSchema,
   password: z.string().min(1).max(128),
@@ -186,6 +191,7 @@ export const dateQuerySchema = z.strictObject({
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
 export type ZoneCreateInput = z.infer<typeof zoneCreateSchema>;
 export type ZoneUpdateInput = z.infer<typeof zoneUpdateSchema>;
 export type AddressCreateInput = z.infer<typeof addressCreateSchema>;

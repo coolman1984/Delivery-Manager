@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import App from './App';
+import { DialogProvider } from './components/dialog';
 import { ToastProvider } from './components/toast';
 import { ApiError } from './lib/api';
 import { AuthProvider } from './lib/auth';
@@ -25,13 +26,15 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <AuthProvider>
-          <CartProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </CartProvider>
-        </AuthProvider>
+        <DialogProvider>
+          <AuthProvider>
+            <CartProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </CartProvider>
+          </AuthProvider>
+        </DialogProvider>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,

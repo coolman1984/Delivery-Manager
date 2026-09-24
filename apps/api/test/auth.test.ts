@@ -38,6 +38,21 @@ describe('🔐 تسجيل الدخول', () => {
     expect(ok.headers['set-cookie']?.[0]).toMatch(/dm_rt=.*HttpOnly.*SameSite=Strict/i);
   });
 
+  it('عميل جديد بيسجل بالموبايل وكلمة سر ويدخل بيهم', async () => {
+    const body = { phone: '01234567899', name: 'عميل بكلمة سر', password: 'Customer-pass-1' };
+    const reg = await anon.post('/auth/register', body);
+    expect(reg.status).toBe(200);
+    expect(reg.body.user.role).toBe('customer');
+    expect((await anon.post('/auth/register', body)).status).toBe(409);
+    expect(
+      (await anon.post('/auth/register', { ...body, phone: '01234567898', password: 'short' }))
+        .status,
+    ).toBe(400);
+    const login = await anon.post('/auth/login', { phone: body.phone, password: body.password });
+    expect(login.status).toBe(200);
+    expect(login.body.user.role).toBe('customer');
+  });
+
   it('الكود بيتقفل بعد ٥ محاولات غلط', async () => {
     const phone = '01234567891';
     const req = await anon.post('/auth/otp/request', { phone });

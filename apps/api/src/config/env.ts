@@ -26,8 +26,9 @@ const envSchema = z
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     SMS_PROVIDER: z.enum(['console']).default('console'),
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
-    // للتجربة على السيرفر قبل التعاقد مع شركة رسائل: الموظفين بس يقدروا يدخلوا
-    ALLOW_CONSOLE_SMS_IN_PRODUCTION: z
+    // الدخول بكود على الموبايل: مقفول لحد ما نتعاقد مع شركة رسائل.
+    // وهو مقفول، العملاء بيسجلوا ويدخلوا برقم الموبايل وكلمة سر.
+    OTP_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
       .transform((v) => v === 'true'),
@@ -42,11 +43,7 @@ const envSchema = z
         });
       }
     }
-    if (
-      env.NODE_ENV === 'production' &&
-      env.SMS_PROVIDER === 'console' &&
-      !env.ALLOW_CONSOLE_SMS_IN_PRODUCTION
-    ) {
+    if (env.NODE_ENV === 'production' && env.OTP_ENABLED && env.SMS_PROVIDER === 'console') {
       ctx.addIssue({
         code: 'custom',
         path: ['SMS_PROVIDER'],

@@ -1,23 +1,127 @@
+@import '@fontsource/ibm-plex-sans-arabic/400.css';
+@import '@fontsource/ibm-plex-sans-arabic/500.css';
+@import '@fontsource/ibm-plex-sans-arabic/600.css';
+@import '@fontsource/ibm-plex-sans-arabic/700.css';
 @import 'tailwindcss';
 
+/*
+ * هوية المنصة:
+ * برتقالي دافي للأزرار والحاجات المهمة، وخلفية كريمي هادية،
+ * ورمادي دافي للنصوص. الخط IBM Plex Sans Arabic واضح على الشاشات الصغيرة.
+ */
 @theme {
-  --font-sans: system-ui, 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Geeza Pro', sans-serif;
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-500: #14b8a6;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
+  --font-sans: 'IBM Plex Sans Arabic', system-ui, Tahoma, sans-serif;
+
+  --color-brand-50: #fff5ef;
+  --color-brand-100: #ffe8da;
+  --color-brand-200: #ffcfb2;
+  --color-brand-300: #ffac80;
+  --color-brand-400: #ff844b;
+  --color-brand-500: #ff6424;
+  --color-brand-600: #ed4b0c;
+  --color-brand-700: #c4390a;
+  --color-brand-800: #9c2f10;
+  --color-brand-900: #7e2a11;
+
+  --color-ink-50: #faf8f6;
+  --color-ink-100: #f3f0ec;
+  --color-ink-200: #e6e1db;
+  --color-ink-300: #d2cbc3;
+  --color-ink-400: #a69d93;
+  --color-ink-500: #7b7269;
+  --color-ink-600: #5c544c;
+  --color-ink-700: #443d37;
+  --color-ink-800: #2b2622;
+  --color-ink-900: #1b1714;
+
+  --color-canvas: #faf7f3;
+
+  --shadow-card: 0 1px 2px rgb(27 23 20 / 0.04), 0 2px 12px rgb(27 23 20 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(27 23 20 / 0.06), 0 12px 32px rgb(27 23 20 / 0.12);
+  --shadow-brand: 0 6px 20px rgb(237 75 12 / 0.28);
+
+  --animate-pop: pop 180ms ease-out;
+  --animate-slide-up: slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade: fade 160ms ease-out;
+  --animate-ring: ring 1.6s ease-out infinite;
 }
 
-html,
-body {
-  background: #f8fafc;
-  color: #0f172a;
-  -webkit-tap-highlight-color: transparent;
+@keyframes pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 100 36 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgb(255 100 36 / 0);
+  }
 }
 
-/* الأرقام تفضل بعرض ثابت عشان الجداول والأسعار ماتتهزّش */
-.tabular {
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink-900);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+}
+
+@utility tabular {
   font-variant-numeric: tabular-nums;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

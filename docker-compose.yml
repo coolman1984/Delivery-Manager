@@ -43,7 +43,7 @@ services:
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?اكتب DATA_ENCRYPTION_KEY في .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?اكتب CORS_ORIGINS في .env}
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
-      ALLOW_CONSOLE_SMS_IN_PRODUCTION: ${ALLOW_CONSOLE_SMS_IN_PRODUCTION:-false}
+      OTP_ENABLED: ${OTP_ENABLED:-false}
       TRUST_PROXY: '1'
     depends_on:
       postgres: { condition: service_healthy }

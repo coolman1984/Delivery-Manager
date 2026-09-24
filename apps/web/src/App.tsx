@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { Loading } from './components/ui';
+import { FullPageLoader } from './components/ui';
 import { useAuth } from './lib/auth';
 import Login from './pages/Login';
 
@@ -13,7 +13,7 @@ const OpsApp = lazy(() => import('./pages/ops/OpsApp'));
 export default function App() {
   const { user, ready } = useAuth();
   const location = useLocation();
-  if (!ready) return <Loading />;
+  if (!ready) return <FullPageLoader />;
 
   const home =
     !user || user.role === 'customer'
@@ -28,7 +28,7 @@ export default function App() {
   const afterLogin = user?.role === 'customer' && from?.startsWith('/') ? from : home;
 
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<FullPageLoader />}>
       <Routes>
         <Route path="/login" element={user ? <Navigate to={afterLogin} replace /> : <Login />} />
         <Route

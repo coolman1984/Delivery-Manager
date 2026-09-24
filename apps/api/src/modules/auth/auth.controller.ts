@@ -1,13 +1,15 @@
-import { ROLES, STAFF_ROLES } from '@dm/shared';
+import { ROLES } from '@dm/shared';
 import {
   changePasswordSchema,
   loginSchema,
   otpRequestSchema,
   otpVerifySchema,
+  registerSchema,
   type ChangePasswordInput,
   type LoginInput,
   type OtpRequestInput,
   type OtpVerifyInput,
+  type RegisterInput,
 } from '@dm/shared/schemas';
 import {
   Body,
@@ -40,7 +42,12 @@ export class AuthController {
   @Public()
   @Get('tenant')
   tenant(@CurrentTenant() tenant: TenantInfo) {
-    return { name: tenant.name, slug: tenant.slug, governorate: tenant.governorate };
+    return {
+      name: tenant.name,
+      slug: tenant.slug,
+      governorate: tenant.governorate,
+      otpEnabled: this.env.OTP_ENABLED,
+    };
   }
 
   @Public()
@@ -64,6 +71,18 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.respond(res, await this.auth.verifyOtp(tenant, body, meta));
+  }
+
+  @Public()
+  @Post('register')
+  @HttpCode(200)
+  async register(
+    @CurrentTenant() tenant: TenantInfo,
+    @Body(new ZodPipe(registerSchema)) body: RegisterInput,
+    @Meta() meta: RequestMeta,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.respond(res, await this.auth.register(tenant, body, meta));
   }
 
   @Public()
@@ -101,7 +120,7 @@ export class AuthController {
 
   @Post('change-password')
   @HttpCode(204)
-  @Roles(...STAFF_ROLES)
+  @Roles(...ROLES)
   async changePassword(
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(changePasswordSchema)) body: ChangePasswordInput,

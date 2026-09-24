@@ -1,8 +1,10 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router';
+import { House, LogIn, Package, ShoppingBag, User } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Layout } from '../../components/Layout';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
+import { CustomerShell } from '../../components/Shell';
 import { useAuth } from '../../lib/auth';
 import { useCart } from '../../lib/cart';
+import Account from './Account';
 import Checkout from './Checkout';
 import Home from './Home';
 import OrderPage from './OrderPage';
@@ -20,14 +22,15 @@ export default function CustomerApp() {
   const cart = useCart();
   const { user } = useAuth();
   const nav = [
-    { to: '/', label: 'المحلات', icon: '🏪' },
-    { to: '/cart', label: `السلة${cart.count ? ` (${cart.count})` : ''}`, icon: '🛒' },
+    { to: '/', label: 'الرئيسية', icon: House },
+    { to: '/orders', label: 'طلباتي', icon: Package, end: false },
+    { to: '/cart', label: 'السلة', icon: ShoppingBag, badge: cart.count },
     user
-      ? { to: '/orders', label: 'طلباتي', icon: '📦' }
-      : { to: '/login', label: 'دخول', icon: '👤' },
+      ? { to: '/account', label: 'حسابي', icon: User }
+      : { to: '/login', label: 'دخول', icon: LogIn },
   ];
   return (
-    <Layout nav={nav} title="اطلب">
+    <CustomerShell nav={nav}>
       <Routes>
         <Route index element={<Home />} />
         <Route path="stores/:id" element={<StorePage />} />
@@ -55,8 +58,16 @@ export default function CustomerApp() {
             </RequireLogin>
           }
         />
+        <Route
+          path="account"
+          element={
+            <RequireLogin>
+              <Account />
+            </RequireLogin>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Layout>
+    </CustomerShell>
   );
 }

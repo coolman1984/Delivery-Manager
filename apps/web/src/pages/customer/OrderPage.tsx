@@ -1,16 +1,90 @@
-import { ORDER_STATUS_LABELS, type OrderStatus } from '@dm/shared';
+import type { OrderStatus } from '@dm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowRight,
+  Bike,
+  ChefHat,
+  CircleCheck,
+  CircleX,
+  Hourglass,
+  MapPin,
+  PackageCheck,
+  Phone,
+  Receipt,
+  Star,
+  type LucideIcon,
+} from 'lucide-react';
 import { useState } from 'react';
-import { useParams } from 'react-router';
-import { Button, Card, ErrorBox, Loading, StatusBadge } from '../../components/ui';
+import { useNavigate, useParams } from 'react-router';
+import { useDialog } from '../../components/dialog';
+import { useToast } from '../../components/toast';
+import {
+  Avatar,
+  Button,
+  Card,
+  cx,
+  ErrorBox,
+  IconButton,
+  Money,
+  SectionTitle,
+  Skeleton,
+} from '../../components/ui';
 import { get, post } from '../../lib/api';
-import { money, time } from '../../lib/format';
+import { num, orderNo, time } from '../../lib/format';
 import type { OrderDetail } from '../../lib/types';
 
-const STEPS: OrderStatus[] = ['placed', 'accepted', 'ready', 'picked_up', 'delivered'];
+const STEPS: Array<{ status: OrderStatus; icon: LucideIcon; label: string }> = [
+  { status: 'placed', icon: Hourglass, label: 'اتطلب' },
+  { status: 'accepted', icon: ChefHat, label: 'بيتحضّر' },
+  { status: 'ready', icon: PackageCheck, label: 'جاهز' },
+  { status: 'picked_up', icon: Bike, label: 'في الطريق' },
+  { status: 'delivered', icon: CircleCheck, label: 'وصل' },
+];
+
+const HERO: Record<OrderStatus, { title: string; text: string; icon: LucideIcon; tone: string }> = {
+  placed: {
+    title: 'مستنيين المحل يأكد طلبك',
+    text: 'عادةً بياخد دقيقة أو اتنين',
+    icon: Hourglass,
+    tone: 'from-brand-600 to-amber-500',
+  },
+  accepted: {
+    title: 'طلبك بيتحضّر',
+    text: 'المحل شغال عليه دلوقتي',
+    icon: ChefHat,
+    tone: 'from-brand-600 to-amber-500',
+  },
+  ready: {
+    title: 'طلبك جاهز',
+    text: 'الطيار في طريقه يستلمه',
+    icon: PackageCheck,
+    tone: 'from-brand-600 to-amber-500',
+  },
+  picked_up: {
+    title: 'الطيار في الطريق ليك',
+    text: 'جهّز الفلوس كاش لو سمحت',
+    icon: Bike,
+    tone: 'from-brand-600 to-amber-500',
+  },
+  delivered: {
+    title: 'وصلك بالهنا والشفا',
+    text: 'شكراً إنك طلبت مننا',
+    icon: CircleCheck,
+    tone: 'from-emerald-600 to-teal-500',
+  },
+  rejected: {
+    title: 'المحل اعتذر عن الطلب',
+    text: '',
+    icon: CircleX,
+    tone: 'from-ink-700 to-ink-500',
+  },
+  cancelled: { title: 'الطلب اتلغى', text: '', icon: CircleX, tone: 'from-ink-700 to-ink-500' },
+};
 
 export default function OrderPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const dialog = useDialog();
   const queryClient = useQueryClient();
   const order = useQuery({
     queryKey: ['order', id],
@@ -26,147 +100,234 @@ export default function OrderPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['order', id] }),
   });
 
-  if (order.isPending) return <Loading />;
+  if (order.isPending) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-40 rounded-3xl" />
+      </div>
+    );
+  }
   if (order.error) return <ErrorBox error={order.error} />;
   const o = order.data;
-  const current = STEPS.indexOf(o.status);
+  const hero = HERO[o.status];
+  const current = STEPS.findIndex((s) => s.status === o.status);
+  const at = (s: OrderStatus) => o.events.find((e) => e.toStatus === s)?.createdAt ?? null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">طلب #{o.number}</h1>
-        <StatusBadge status={o.status} />
+    <div className="mx-auto max-w-2xl space-y-4">
+      <div className="flex items-center gap-2">
+        <IconButton icon={ArrowRight} label="رجوع" onClick={() => navigate('/orders')} />
+        <h1 className="text-lg font-bold">طلب {orderNo(o.number)}</h1>
       </div>
 
-      {current >= 0 ? (
-        <Card>
-          <ol className="space-y-3">
-            {STEPS.map((s, i) => {
-              const at = o.events.find((e) => e.toStatus === s)?.createdAt ?? null;
-              return (
-                <li key={s} className="flex items-center gap-3">
-                  <span
-                    className={`flex size-7 items-center justify-center rounded-full text-sm font-bold ${i <= current ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
-                  >
-                    {i < current ? '✓' : i + 1}
-                  </span>
-                  <span className={`flex-1 ${i <= current ? 'font-semibold' : 'text-slate-400'}`}>
-                    {ORDER_STATUS_LABELS[s]}
-                  </span>
-                  <span className="tabular text-xs text-slate-500">{at ? time(at) : ''}</span>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
-      ) : (
-        <Card className="bg-red-50 text-red-800">
-          {ORDER_STATUS_LABELS[o.status]}
-          {o.reason ? `: ${o.reason}` : ''}
-        </Card>
-      )}
+      <div
+        className={cx(
+          'relative overflow-hidden rounded-3xl bg-gradient-to-br p-6 text-white shadow-lift',
+          hero.tone,
+        )}
+      >
+        <hero.icon className="absolute -top-6 -left-6 size-32 text-white/10" strokeWidth={1.4} />
+        <div className="relative">
+          <div className="text-sm text-white/80">{o.storeName}</div>
+          <h2 className="mt-1 text-2xl font-bold">{hero.title}</h2>
+          {(hero.text || o.reason) && <p className="mt-1 text-white/85">{o.reason ?? hero.text}</p>}
+        </div>
 
-      {o.driverName && (
-        <Card className="flex items-center justify-between">
-          <span>
-            🛵 الطيار: <b>{o.driverName}</b>
-          </span>
-          {o.driverPhone && o.status === 'picked_up' && (
-            <a
-              href={`tel:${o.driverPhone}`}
-              className="rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700"
-            >
-              اتصل
+        {current >= 0 && (
+          <div className="relative mt-6 flex items-start justify-between">
+            <div className="absolute inset-x-5 top-5 h-1 rounded-full bg-white/25" />
+            <div
+              className="absolute start-5 top-5 h-1 rounded-full bg-white transition-all duration-700"
+              style={{ width: `calc((100% - 2.5rem) * ${current / (STEPS.length - 1)})` }}
+            />
+            {STEPS.map((s, i) => (
+              <div key={s.status} className="relative flex w-14 flex-col items-center gap-1.5">
+                <span
+                  className={cx(
+                    'flex size-10 items-center justify-center rounded-full transition',
+                    i <= current
+                      ? cx(
+                          'bg-white',
+                          o.status === 'delivered' ? 'text-emerald-600' : 'text-brand-600',
+                        )
+                      : 'bg-white/20 text-white/70',
+                    i === current && o.status !== 'delivered' && 'animate-ring',
+                  )}
+                >
+                  <s.icon className="size-5" strokeWidth={2.2} />
+                </span>
+                <span
+                  className={cx(
+                    'text-[11px] font-medium',
+                    i <= current ? 'text-white' : 'text-white/60',
+                  )}
+                >
+                  {s.label}
+                </span>
+                <span className="tabular text-[10px] text-white/70">
+                  {at(s.status) ? time(at(s.status)) : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {o.driverName && o.status !== 'delivered' && current >= 0 && (
+        <Card className="flex items-center gap-3">
+          <Avatar name={o.driverName} />
+          <div className="flex-1">
+            <div className="text-xs text-ink-500">الطيار</div>
+            <div className="font-bold">{o.driverName}</div>
+          </div>
+          {o.driverPhone && (
+            <a href={`tel:${o.driverPhone}`}>
+              <Button variant="soft" icon={Phone}>
+                اتصل
+              </Button>
             </a>
           )}
         </Card>
       )}
 
-      <Card className="tabular space-y-1 text-sm">
-        <div className="mb-2 font-semibold">{o.storeName}</div>
-        {o.items.map((it, i) => (
-          <div key={i} className="flex justify-between">
-            <span>
-              {it.quantity} × {it.name}
-            </span>
-            <span>{money(it.lineTotal)}</span>
+      {o.status === 'delivered' && !o.rated && (
+        <RateCard orderId={o.id} hasDriver={Boolean(o.driverId)} />
+      )}
+      {o.rated && (
+        <Card className="flex items-center gap-3 text-emerald-700">
+          <Star className="size-5 fill-amber-400 text-amber-400" /> شكراً على تقييمك، ده بيساعدنا
+          نتحسن
+        </Card>
+      )}
+
+      <Card>
+        <SectionTitle icon={Receipt}>تفاصيل الطلب</SectionTitle>
+        <ul className="tabular space-y-2.5 text-sm">
+          {o.items.map((it, i) => (
+            <li key={i} className="flex justify-between gap-3">
+              <span>
+                <span className="me-2 inline-flex min-w-6 justify-center rounded-lg bg-ink-100 px-1.5 text-xs font-bold text-ink-700">
+                  {num(it.quantity)}×
+                </span>
+                {it.name}
+              </span>
+              <Money value={it.lineTotal} />
+            </li>
+          ))}
+        </ul>
+        <dl className="tabular mt-4 space-y-2 border-t border-dashed border-ink-200 pt-4 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-ink-500">المنتجات</dt>
+            <dd>
+              <Money value={o.subtotal} />
+            </dd>
           </div>
-        ))}
-        <div className="flex justify-between border-t border-slate-100 pt-2">
-          <span>التوصيل</span>
-          <span>{money(o.deliveryFee)}</span>
+          <div className="flex justify-between">
+            <dt className="text-ink-500">التوصيل</dt>
+            <dd>
+              <Money value={o.deliveryFee} />
+            </dd>
+          </div>
+          <div className="flex justify-between pt-1 text-base font-bold">
+            <dt>الإجمالي (كاش)</dt>
+            <dd>
+              <Money value={o.total} />
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-4 flex items-start gap-2 rounded-2xl bg-ink-50 p-3 text-sm text-ink-600">
+          <MapPin className="mt-0.5 size-4 shrink-0" /> {o.addressText}
         </div>
-        <div className="flex justify-between text-base font-bold">
-          <span>الإجمالي (كاش)</span>
-          <span>{money(o.total)}</span>
-        </div>
-        <div className="pt-1 text-xs text-slate-500">📍 {o.addressText}</div>
       </Card>
 
       {o.status === 'placed' && (
         <Button
-          variant="danger"
-          className="w-full"
+          variant="secondary"
+          block
+          className="text-rose-600"
           loading={cancel.isPending}
-          onClick={() => confirm('متأكد إنك عايز تلغي الطلب؟') && cancel.mutate()}
+          onClick={async () => {
+            const ok = await dialog.confirm({
+              title: 'تلغي الطلب؟',
+              description: 'المحل لسه ماقبلش الطلب، فتقدر تلغيه من غير أي مشكلة.',
+              confirmLabel: 'أيوه، الغي الطلب',
+              danger: true,
+              icon: CircleX,
+            });
+            if (ok) cancel.mutate();
+          }}
         >
           إلغاء الطلب
         </Button>
       )}
       {cancel.error && <ErrorBox error={cancel.error} />}
-      {o.status === 'delivered' && !o.rated && (
-        <RateForm orderId={o.id} hasDriver={Boolean(o.driverId)} />
-      )}
-      {o.rated && <p className="text-center text-sm text-slate-500">⭐ شكراً على تقييمك</p>}
     </div>
   );
 }
 
-function Stars({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function Stars({
+  value,
+  onChange,
+  label,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  label: string;
+}) {
   return (
-    <div className="flex gap-1" dir="ltr">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={`text-3xl ${n <= value ? '' : 'opacity-25 grayscale'}`}
-          aria-label={`${n} نجوم`}
-        >
-          ⭐
-        </button>
-      ))}
+    <div className="flex items-center justify-between gap-3">
+      <span className="font-medium">{label}</span>
+      <div className="flex gap-1" dir="ltr" role="radiogroup" aria-label={label}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${num(n)} من ٥`}
+            onClick={() => onChange(n)}
+            className="cursor-pointer p-0.5 transition active:scale-90"
+          >
+            <Star
+              className={cx(
+                'size-8',
+                n <= value ? 'fill-amber-400 text-amber-400' : 'text-ink-200',
+              )}
+            />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-function RateForm({ orderId, hasDriver }: { orderId: string; hasDriver: boolean }) {
-  const [store, setStore] = useState(5);
-  const [driver, setDriver] = useState(5);
+function RateCard({ orderId, hasDriver }: { orderId: string; hasDriver: boolean }) {
+  const [store, setStore] = useState(0);
+  const [driver, setDriver] = useState(0);
+  const toast = useToast();
   const queryClient = useQueryClient();
   const rate = useMutation({
     mutationFn: () =>
       post(`/orders/${orderId}/rate`, {
         storeRating: store,
-        ...(hasDriver ? { driverRating: driver } : {}),
+        ...(hasDriver && driver ? { driverRating: driver } : {}),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['order', orderId] }),
+    onSuccess: () => {
+      toast('شكراً على تقييمك');
+      void queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+    },
   });
   return (
-    <Card className="space-y-3">
-      <h2 className="font-semibold">قيّم تجربتك</h2>
-      <div className="flex items-center justify-between">
-        <span>المحل</span>
-        <Stars value={store} onChange={setStore} />
+    <Card className="space-y-4 ring-brand-200">
+      <div>
+        <h2 className="font-bold">إيه رأيك في الطلب؟</h2>
+        <p className="text-sm text-ink-500">تقييمك بيساعد غيرك يختار صح</p>
       </div>
-      {hasDriver && (
-        <div className="flex items-center justify-between">
-          <span>الطيار</span>
-          <Stars value={driver} onChange={setDriver} />
-        </div>
-      )}
+      <Stars label="المحل" value={store} onChange={setStore} />
+      {hasDriver && <Stars label="الطيار" value={driver} onChange={setDriver} />}
       {rate.error && <ErrorBox error={rate.error} />}
-      <Button className="w-full" loading={rate.isPending} onClick={() => rate.mutate()}>
+      <Button block disabled={store === 0} loading={rate.isPending} onClick={() => rate.mutate()}>
         إرسال التقييم
       </Button>
     </Card>

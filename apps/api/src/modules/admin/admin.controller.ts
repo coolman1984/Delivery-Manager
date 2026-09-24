@@ -223,7 +223,7 @@ export class AdminController {
           ...(passwordHash ? { passwordHash, failedLoginCount: 0, lockedUntil: null } : {}),
           updatedAt: new Date(),
         })
-        .where(and(eq(users.id, id), passwordHash ? ne(users.role, 'customer') : undefined))
+        .where(eq(users.id, id))
         .returning({ id: users.id, name: users.name, isActive: users.isActive });
       if (!row) throw new NotFoundException('المستخدم مش موجود');
       if (body.isActive === false || passwordHash) {

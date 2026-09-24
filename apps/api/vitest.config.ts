@@ -23,6 +23,7 @@ export default defineConfig({
       JWT_ACCESS_SECRET: 'test-secret-that-is-long-enough-for-hs256-signing',
       DATA_ENCRYPTION_KEY: '0'.repeat(64),
       SMS_PROVIDER: 'console',
+      OTP_ENABLED: 'true',
     },
   },
   plugins: [swc.vite({ module: { type: 'es6' } })],

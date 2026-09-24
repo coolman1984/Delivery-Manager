@@ -1,9 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
-import { Button, Card, ErrorBox, Input, Loading, PageTitle } from '../../components/ui';
+import { Pencil, Plus, Search, Tag } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Modal, useDialog } from '../../components/dialog';
 import { useToast } from '../../components/toast';
+import {
+  Button,
+  Card,
+  cx,
+  EmptyState,
+  ErrorBox,
+  Input,
+  Money,
+  PageHeader,
+  SkeletonList,
+  Switch,
+} from '../../components/ui';
 import { get, patch, post } from '../../lib/api';
-import { money, toPiasters } from '../../lib/format';
+import { num, toPiasters } from '../../lib/format';
 import type { Product } from '../../lib/types';
 
 export default function StoreProducts() {
@@ -12,25 +25,69 @@ export default function StoreProducts() {
     queryFn: () => get<Product[]>('/store/products'),
   });
   const [adding, setAdding] = useState(false);
-  if (products.isPending) return <Loading />;
-  if (products.error) return <ErrorBox error={products.error} />;
+  const [search, setSearch] = useState('');
+
+  const groups = useMemo(() => {
+    const map = new Map<string, Product[]>();
+    for (const p of products.data ?? []) {
+      if (search && !p.name.includes(search.trim())) continue;
+      const key = p.category ?? 'من غير قسم';
+      map.set(key, [...(map.get(key) ?? []), p]);
+    }
+    return [...map];
+  }, [products.data, search]);
+
+  const available = products.data?.filter((p) => p.isAvailable).length ?? 0;
+
   return (
     <div>
-      <PageTitle
-        action={
-          <Button variant="secondary" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'إغلاق' : '+ منتج جديد'}
+      <PageHeader
+        title="المنتجات والأسعار"
+        subtitle={
+          products.data && `${num(products.data.length)} منتج · ${num(available)} متاح للطلب`
+        }
+        actions={
+          <Button icon={Plus} onClick={() => setAdding(true)}>
+            منتج جديد
           </Button>
         }
-      >
-        المنتجات والأسعار
-      </PageTitle>
-      {adding && <NewProduct onDone={() => setAdding(false)} />}
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-        {products.data.map((p) => (
-          <ProductRow key={p.id} product={p} />
+      />
+      <div className="mb-5 max-w-md">
+        <Input
+          icon={Search}
+          placeholder="دوّر على منتج"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="بحث"
+        />
+      </div>
+      {products.isPending && <SkeletonList count={4} className="h-16" />}
+      {products.error && <ErrorBox error={products.error} />}
+      {products.data?.length === 0 && (
+        <EmptyState
+          icon={Tag}
+          title="لسه مفيش منتجات"
+          text="ضيف منتجاتك وأسعارها عشان العملاء يطلبوا"
+          action={
+            <Button icon={Plus} onClick={() => setAdding(true)}>
+              أول منتج
+            </Button>
+          }
+        />
+      )}
+      <div className="space-y-6">
+        {groups.map(([category, items]) => (
+          <section key={category}>
+            <h2 className="mb-2 text-sm font-bold text-ink-500">{category}</h2>
+            <Card padded={false} className="divide-y divide-ink-100">
+              {items.map((p) => (
+                <ProductRow key={p.id} product={p} />
+              ))}
+            </Card>
+          </section>
         ))}
       </div>
+      <NewProductModal open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }
@@ -38,70 +95,58 @@ export default function StoreProducts() {
 function ProductRow({ product }: { product: Product }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [editing, setEditing] = useState(false);
-  const [price, setPrice] = useState(String(product.price / 100));
+  const dialog = useDialog();
   const update = useMutation({
     mutationFn: (body: Partial<Product>) => patch(`/store/products/${product.id}`, body),
     onSuccess: () => {
-      setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ['store-products'] });
-      toast('اتحفظ ✅');
+      toast('اتحفظ');
     },
     onError: (err) => toast(err.message, 'error'),
   });
 
-  function savePrice(e: FormEvent) {
-    e.preventDefault();
-    const value = toPiasters(price);
-    if (!Number.isInteger(value) || value <= 0) return toast('السعر غلط', 'error');
-    update.mutate({ price: value });
+  async function editPrice() {
+    const value = await dialog.prompt({
+      title: `سعر ${product.name}`,
+      label: 'السعر الجديد',
+      defaultValue: String(product.price / 100),
+      inputMode: 'decimal',
+      icon: Tag,
+      validate: (v) => {
+        const p = toPiasters(v);
+        return Number.isInteger(p) && p > 0 ? null : 'اكتب سعر صحيح';
+      },
+    });
+    if (value) update.mutate({ price: toPiasters(value) });
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 p-3">
-      <div className="min-w-40 flex-1">
-        <div className={`font-medium ${product.isAvailable ? '' : 'text-slate-400 line-through'}`}>
+    <div className="flex items-center gap-4 px-5 py-3.5">
+      <div className="min-w-0 flex-1">
+        <div className={cx('font-semibold', !product.isAvailable && 'text-ink-400 line-through')}>
           {product.name}
         </div>
-        <div className="text-xs text-slate-500">{product.category}</div>
+        {!product.isAvailable && <div className="text-xs text-ink-400">مش ظاهر للعملاء</div>}
       </div>
-      {editing ? (
-        <form onSubmit={savePrice} className="flex items-center gap-2">
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            inputMode="decimal"
-            dir="ltr"
-            className="w-24 rounded-lg border border-slate-300 px-2 py-2"
-            autoFocus
-          />
-          <Button type="submit" loading={update.isPending}>
-            حفظ
-          </Button>
-        </form>
-      ) : (
-        <button
-          onClick={() => setEditing(true)}
-          className="tabular rounded-lg px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50"
-        >
-          {money(product.price)} ✏️
-        </button>
-      )}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={product.isAvailable}
-          onChange={(e) => update.mutate({ isAvailable: e.target.checked })}
-          className="size-5 accent-brand-600"
-        />
-        متاح
-      </label>
+      <button
+        onClick={() => void editPrice()}
+        className="group flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold text-ink-900 transition hover:bg-brand-50 hover:text-brand-700"
+      >
+        <Money value={product.price} />
+        <Pencil className="size-3.5 text-ink-300 group-hover:text-brand-600" />
+      </button>
+      <Switch
+        checked={product.isAvailable ?? true}
+        onChange={(v) => update.mutate({ isAvailable: v })}
+        label={`${product.name} متاح`}
+      />
     </div>
   );
 }
 
-function NewProduct({ onDone }: { onDone: () => void }) {
+function NewProductModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
@@ -113,19 +158,20 @@ function NewProduct({ onDone }: { onDone: () => void }) {
         ...(category ? { category } : {}),
       }),
     onSuccess: () => {
+      toast('المنتج اتضاف');
       void queryClient.invalidateQueries({ queryKey: ['store-products'] });
-      onDone();
+      setName('');
+      setPrice('');
+      onClose();
     },
   });
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    create.mutate();
+  }
   return (
-    <Card className="mb-4">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          create.mutate();
-        }}
-        className="grid gap-3 sm:grid-cols-3"
-      >
+    <Modal open={open} onClose={onClose} title="منتج جديد" icon={Plus}>
+      <form onSubmit={submit} className="space-y-4">
         <Input
           label="اسم المنتج"
           value={name}
@@ -135,27 +181,25 @@ function NewProduct({ onDone }: { onDone: () => void }) {
         />
         <Input
           label="القسم"
+          hint="مثلاً: مشويات، مشروبات، مسكنات"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           maxLength={40}
         />
         <Input
-          label="السعر بالجنيه"
+          label="السعر"
+          suffix="ج.م"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           inputMode="decimal"
           dir="ltr"
           required
         />
-        {create.error && (
-          <div className="sm:col-span-3">
-            <ErrorBox error={create.error} />
-          </div>
-        )}
-        <Button type="submit" loading={create.isPending} className="sm:col-span-3">
-          إضافة
+        {create.error && <ErrorBox error={create.error} />}
+        <Button type="submit" size="lg" block loading={create.isPending}>
+          إضافة المنتج
         </Button>
       </form>
-    </Card>
+    </Modal>
   );
 }

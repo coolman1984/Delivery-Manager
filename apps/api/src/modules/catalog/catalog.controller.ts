@@ -1,12 +1,17 @@
 import { STORE_TYPES, type StoreType } from '@dm/shared';
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantInfo } from '../../common/auth-context';
 import { DbService } from '../../common/db.service';
 import { CurrentTenant, Public } from '../../common/decorators';
 import { ZodPipe } from '../../common/zod.pipe';
-import { products, stores, zones } from '../../db/schema';
+import { products, ratings, stores, zones } from '../../db/schema';
+
+const ratingAvg = sql<
+  number | null
+>`(select round(avg(${ratings.storeRating})::numeric, 1)::float from ${ratings} where ${ratings.storeId} = ${stores.id})`;
+const ratingCount = sql<number>`(select count(*)::int from ${ratings} where ${ratings.storeId} = ${stores.id})`;
 
 const storesQuery = z.strictObject({ type: z.enum(STORE_TYPES).optional() });
 
@@ -40,6 +45,8 @@ export class CatalogController {
           type: stores.type,
           isOpen: stores.isOpen,
           zoneName: zones.name,
+          rating: ratingAvg,
+          ratingCount,
         })
         .from(stores)
         .innerJoin(zones, eq(zones.id, stores.zoneId))
@@ -58,6 +65,8 @@ export class CatalogController {
           type: stores.type,
           isOpen: stores.isOpen,
           address: stores.address,
+          rating: ratingAvg,
+          ratingCount,
         })
         .from(stores)
         .where(and(eq(stores.id, id), eq(stores.isActive, true)))

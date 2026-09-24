@@ -245,6 +245,7 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
           phone: phone(31 + i),
           name,
           role: 'customer',
+          passwordHash,
           phoneVerifiedAt: new Date(),
         })
         .returning();
@@ -286,7 +287,7 @@ if (require.main === module) {
   }
   seed(url)
     .then(() => {
-      console.log(`\n🔑 كلمة السر لكل حسابات الموظفين التجريبية: ${DEMO_PASSWORD}`);
+      console.log(`\n🔑 كلمة السر لكل الحسابات التجريبية: ${DEMO_PASSWORD}`);
       console.log('📖 أرقام الحسابات موجودة في ملف README.md');
     })
     .catch((err: unknown) => {

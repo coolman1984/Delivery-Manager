@@ -1,11 +1,39 @@
 import { ROLE_LABELS, STORE_TYPE_LABELS, STORE_TYPES, type Role, type StoreType } from '@dm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Activity,
+  KeyRound,
+  MapPin,
+  Pencil,
+  Percent,
+  Plus,
+  ScrollText,
+  Store,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { Modal, useDialog } from '../../components/dialog';
 import { useToast } from '../../components/toast';
-import { Button, Card, ErrorBox, Input, Loading, PageTitle, Select } from '../../components/ui';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  cx,
+  ErrorBox,
+  Input,
+  Money,
+  PageHeader,
+  Segmented,
+  Select,
+  SkeletonList,
+  Switch,
+} from '../../components/ui';
 import { get, patch, post } from '../../lib/api';
-import { dateTime, money, toPiasters } from '../../lib/format';
+import { dateTime, num, toPiasters } from '../../lib/format';
 import type { Zone } from '../../lib/types';
+import { STORE_VISUAL } from '../../lib/visuals';
 
 interface AdminStore {
   id: string;
@@ -31,31 +59,30 @@ interface AuditRow {
   createdAt: string;
 }
 
-const TABS = [
-  { id: 'zones', label: '📍 المناطق' },
-  { id: 'stores', label: '🏪 المحلات' },
-  { id: 'users', label: '👥 الموظفين' },
-  { id: 'audit', label: '🕵️ سجل العمليات' },
-] as const;
+type Tab = 'zones' | 'stores' | 'users' | 'audit';
 
 export default function Admin() {
-  const [tab, setTab] = useState<(typeof TABS)[number]['id']>('zones');
+  const [tab, setTab] = useState<Tab>('zones');
   return (
     <div>
-      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm ${tab === t.id ? 'bg-brand-700 text-white' : 'bg-white ring-1 ring-slate-300'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PageHeader
+        title="الإدارة"
+        subtitle="المناطق والأسعار، المحلات والعمولات، والموظفين. كل تعديل بيتسجل."
+      />
+      <Segmented
+        className="mb-6"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'zones', label: 'المناطق' },
+          { value: 'stores', label: 'المحلات' },
+          { value: 'users', label: 'الموظفين' },
+          { value: 'audit', label: 'سجل العمليات' },
+        ]}
+      />
       {tab === 'zones' && <Zones />}
       {tab === 'stores' && <Stores />}
-      {tab === 'users' && <Users />}
+      {tab === 'users' && <UsersTab />}
       {tab === 'audit' && <Audit />}
     </div>
   );
@@ -66,106 +93,212 @@ function useSaver(key: string) {
   const toast = useToast();
   return {
     onSuccess: () => {
-      toast('اتحفظ ✅');
+      toast('اتحفظ');
       void queryClient.invalidateQueries({ queryKey: [key] });
     },
     onError: (e: Error) => toast(e.message, 'error'),
   };
 }
 
+function TableCard({
+  title,
+  icon: Icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon: typeof MapPin;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card padded={false}>
+      <div className="flex items-center justify-between gap-3 border-b border-ink-100 px-5 py-4">
+        <h2 className="flex items-center gap-2 font-bold">
+          <Icon className="size-5 text-brand-600" /> {title}
+        </h2>
+        {action}
+      </div>
+      <div className="divide-y divide-ink-100">{children}</div>
+    </Card>
+  );
+}
+
+// ———— المناطق ————
 function Zones() {
   const zones = useQuery({ queryKey: ['admin-zones'], queryFn: () => get<Zone[]>('/admin/zones') });
   const saver = useSaver('admin-zones');
+  const dialog = useDialog();
   const update = useMutation({
     mutationFn: (v: { id: string; body: Partial<Zone> }) => patch(`/admin/zones/${v.id}`, v.body),
     ...saver,
   });
-  const [name, setName] = useState('');
-  const [fee, setFee] = useState('');
   const create = useMutation({
-    mutationFn: () => post('/admin/zones', { name, deliveryFee: toPiasters(fee) }),
+    mutationFn: (body: { name: string; deliveryFee: number }) => post('/admin/zones', body),
     ...saver,
   });
 
-  if (zones.isPending) return <Loading />;
+  const priceValidator = (v: string) => (Number.isInteger(toPiasters(v)) ? null : 'اكتب سعر صحيح');
+
+  async function addZone() {
+    const name = await dialog.prompt({
+      title: 'منطقة جديدة',
+      label: 'اسم المنطقة',
+      minLength: 2,
+      icon: MapPin,
+      confirmLabel: 'التالي',
+    });
+    if (!name) return;
+    const fee = await dialog.prompt({
+      title: `سعر التوصيل لـ ${name}`,
+      label: 'السعر بالجنيه',
+      inputMode: 'decimal',
+      icon: MapPin,
+      validate: priceValidator,
+      confirmLabel: 'إضافة',
+    });
+    if (fee) create.mutate({ name, deliveryFee: toPiasters(fee) });
+  }
+
+  async function editFee(z: Zone) {
+    const fee = await dialog.prompt({
+      title: `سعر التوصيل لـ ${z.name}`,
+      label: 'السعر بالجنيه',
+      defaultValue: String(z.deliveryFee / 100),
+      inputMode: 'decimal',
+      icon: MapPin,
+      validate: priceValidator,
+    });
+    if (fee) update.mutate({ id: z.id, body: { deliveryFee: toPiasters(fee) } });
+  }
+
+  if (zones.isPending) return <SkeletonList count={4} className="h-14" />;
   if (zones.error) return <ErrorBox error={zones.error} />;
   return (
-    <div className="space-y-4">
-      <PageTitle>المناطق وأسعار التوصيل</PageTitle>
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-        {zones.data.map((z) => (
-          <div key={z.id} className="tabular flex items-center gap-3 p-3">
-            <span
-              className={`flex-1 font-medium ${z.isActive ? '' : 'text-slate-400 line-through'}`}
-            >
-              {z.name}
-            </span>
-            <button
-              className="rounded-lg px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50"
-              onClick={() => {
-                const v = prompt(`سعر التوصيل لـ ${z.name} بالجنيه:`, String(z.deliveryFee / 100));
-                const p = v ? toPiasters(v) : NaN;
-                if (Number.isInteger(p)) update.mutate({ id: z.id, body: { deliveryFee: p } });
-              }}
-            >
-              {money(z.deliveryFee)} ✏️
-            </button>
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                className="size-5 accent-brand-600"
-                checked={z.isActive}
-                onChange={(e) => update.mutate({ id: z.id, body: { isActive: e.target.checked } })}
-              />
-              شغالة
-            </label>
-          </div>
-        ))}
-      </div>
-      <Card>
-        <form
-          className="grid gap-3 sm:grid-cols-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate();
-          }}
-        >
-          <Input
-            label="منطقة جديدة"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            minLength={2}
+    <TableCard
+      title="المناطق وأسعار التوصيل"
+      icon={MapPin}
+      action={
+        <Button size="sm" icon={Plus} onClick={() => void addZone()}>
+          منطقة
+        </Button>
+      }
+    >
+      {zones.data.map((z) => (
+        <div key={z.id} className="flex items-center gap-4 px-5 py-3.5">
+          <span className={cx('flex-1 font-medium', !z.isActive && 'text-ink-400 line-through')}>
+            {z.name}
+          </span>
+          <button
+            onClick={() => void editFee(z)}
+            className="group flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold hover:bg-brand-50 hover:text-brand-700"
+          >
+            <Money value={z.deliveryFee} />{' '}
+            <Pencil className="size-3.5 text-ink-300 group-hover:text-brand-600" />
+          </button>
+          <Switch
+            checked={z.isActive ?? true}
+            onChange={(v) => update.mutate({ id: z.id, body: { isActive: v } })}
+            label={`${z.name} شغالة`}
           />
-          <Input
-            label="سعر التوصيل بالجنيه"
-            value={fee}
-            onChange={(e) => setFee(e.target.value)}
-            inputMode="decimal"
-            dir="ltr"
-            required
-          />
-          <Button type="submit" loading={create.isPending} className="self-end">
-            إضافة
-          </Button>
-        </form>
-      </Card>
-    </div>
+        </div>
+      ))}
+    </TableCard>
   );
 }
 
+// ———— المحلات ————
 function Stores() {
   const stores = useQuery({
     queryKey: ['admin-stores'],
     queryFn: () => get<AdminStore[]>('/admin/stores'),
   });
-  const zones = useQuery({ queryKey: ['admin-zones'], queryFn: () => get<Zone[]>('/admin/zones') });
   const saver = useSaver('admin-stores');
+  const dialog = useDialog();
+  const [adding, setAdding] = useState(false);
   const update = useMutation({
     mutationFn: (v: { id: string; body: Partial<AdminStore> }) =>
       patch(`/admin/stores/${v.id}`, v.body),
     ...saver,
   });
+
+  async function editCommission(s: AdminStore) {
+    const value = await dialog.prompt({
+      title: `عمولة ${s.name}`,
+      description: 'النسبة اللي المنصة بتاخدها من قيمة المنتجات في كل طلب',
+      label: 'النسبة ٪',
+      defaultValue: String(s.commissionBps / 100),
+      inputMode: 'decimal',
+      icon: Percent,
+      validate: (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n >= 0 && n <= 50 ? null : 'من ٠ لـ ٥٠٪';
+      },
+    });
+    if (value)
+      update.mutate({ id: s.id, body: { commissionBps: Math.round(Number(value) * 100) } });
+  }
+
+  if (stores.isPending) return <SkeletonList count={4} className="h-16" />;
+  if (stores.error) return <ErrorBox error={stores.error} />;
+  return (
+    <>
+      <TableCard
+        title="المحلات والعمولات"
+        icon={Store}
+        action={
+          <Button size="sm" icon={Plus} onClick={() => setAdding(true)}>
+            محل
+          </Button>
+        }
+      >
+        {stores.data.map((s) => {
+          const v = STORE_VISUAL[s.type];
+          return (
+            <div key={s.id} className="flex items-center gap-4 px-5 py-3.5">
+              <span
+                className={cx(
+                  'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                  v.tile,
+                )}
+              >
+                <v.icon className={cx('size-5', v.iconColor)} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className={cx('font-medium', !s.isActive && 'text-ink-400 line-through')}>
+                  {s.name}
+                </div>
+                <div className="text-xs text-ink-500">{STORE_TYPE_LABELS[s.type]}</div>
+              </div>
+              <button
+                onClick={() => void editCommission(s)}
+                className="group flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold hover:bg-brand-50 hover:text-brand-700"
+              >
+                <span className="tabular">{num(s.commissionBps / 100)}٪</span>
+                <Pencil className="size-3.5 text-ink-300 group-hover:text-brand-600" />
+              </button>
+              <Switch
+                checked={s.isActive}
+                onChange={(val) => update.mutate({ id: s.id, body: { isActive: val } })}
+                label={`${s.name} شغال`}
+              />
+            </div>
+          );
+        })}
+      </TableCard>
+      <NewStoreModal open={adding} onClose={() => setAdding(false)} />
+    </>
+  );
+}
+
+function NewStoreModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const zones = useQuery({
+    queryKey: ['admin-zones'],
+    queryFn: () => get<Zone[]>('/admin/zones'),
+    enabled: open,
+  });
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [form, setForm] = useState({
     name: '',
     type: 'restaurant' as StoreType,
@@ -184,136 +317,169 @@ function Stores() {
         phone: form.phone,
         commissionBps: Math.round(Number(form.commission) * 100),
       }),
-    ...saver,
+    onSuccess: () => {
+      toast('المحل اتضاف. اعمل له حساب من تاب الموظفين');
+      void queryClient.invalidateQueries({ queryKey: ['admin-stores'] });
+      onClose();
+    },
   });
-
-  if (stores.isPending) return <Loading />;
-  if (stores.error) return <ErrorBox error={stores.error} />;
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    create.mutate();
+  }
   return (
-    <div className="space-y-4">
-      <PageTitle>المحلات والعمولات</PageTitle>
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-        {stores.data.map((s) => (
-          <div key={s.id} className="tabular flex flex-wrap items-center gap-3 p-3">
-            <div className="flex-1">
-              <div className={`font-medium ${s.isActive ? '' : 'text-slate-400 line-through'}`}>
-                {s.name}
-              </div>
-              <div className="text-xs text-slate-500">{STORE_TYPE_LABELS[s.type]}</div>
-            </div>
-            <button
-              className="rounded-lg px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50"
-              onClick={() => {
-                const v = prompt(`نسبة عمولة ${s.name} (٪):`, String(s.commissionBps / 100));
-                const bps = v ? Math.round(Number(v) * 100) : NaN;
-                if (Number.isInteger(bps) && bps >= 0 && bps <= 5000)
-                  update.mutate({ id: s.id, body: { commissionBps: bps } });
-              }}
-            >
-              عمولة {s.commissionBps / 100}٪ ✏️
-            </button>
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                className="size-5 accent-brand-600"
-                checked={s.isActive}
-                onChange={(e) => update.mutate({ id: s.id, body: { isActive: e.target.checked } })}
-              />
-              شغال
-            </label>
-          </div>
-        ))}
-      </div>
-      <Card>
-        <h2 className="mb-3 font-semibold">محل جديد</h2>
-        <form
-          className="grid gap-3 sm:grid-cols-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate();
-          }}
+    <Modal open={open} onClose={onClose} title="محل جديد" icon={Store} size="lg">
+      <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="اسم المحل"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+        <Select
+          label="النوع"
+          value={form.type}
+          onChange={(e) => setForm({ ...form, type: e.target.value as StoreType })}
         >
-          <Input
-            label="الاسم"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <Select
-            label="النوع"
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value as StoreType })}
-          >
-            {STORE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {STORE_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="المنطقة"
-            value={form.zoneId}
-            onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
-            required
-          >
-            <option value="">اختار</option>
-            {zones.data?.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
-              </option>
-            ))}
-          </Select>
-          <Input
-            label="العنوان"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            required
-          />
-          <Input
-            label="تليفون المحل"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            inputMode="tel"
-            dir="ltr"
-            required
-          />
-          <Input
-            label="العمولة ٪"
-            value={form.commission}
-            onChange={(e) => setForm({ ...form, commission: e.target.value })}
-            inputMode="decimal"
-            dir="ltr"
-            required
-          />
-          {create.error && (
-            <div className="sm:col-span-2">
-              <ErrorBox error={create.error} />
-            </div>
-          )}
-          <Button type="submit" loading={create.isPending} className="sm:col-span-2">
-            إضافة المحل
-          </Button>
-        </form>
-      </Card>
-    </div>
+          {STORE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {STORE_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="المنطقة"
+          value={form.zoneId}
+          onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
+          required
+        >
+          <option value="">اختار المنطقة</option>
+          {zones.data?.map((z) => (
+            <option key={z.id} value={z.id}>
+              {z.name}
+            </option>
+          ))}
+        </Select>
+        <Input
+          label="تليفون المحل"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          inputMode="tel"
+          dir="ltr"
+          required
+        />
+        <Input
+          label="العنوان"
+          value={form.address}
+          onChange={(e) => setForm({ ...form, address: e.target.value })}
+          required
+        />
+        <Input
+          label="العمولة"
+          suffix="٪"
+          value={form.commission}
+          onChange={(e) => setForm({ ...form, commission: e.target.value })}
+          inputMode="decimal"
+          dir="ltr"
+          required
+        />
+        {create.error && (
+          <div className="sm:col-span-2">
+            <ErrorBox error={create.error} />
+          </div>
+        )}
+        <Button type="submit" size="lg" loading={create.isPending} className="sm:col-span-2">
+          إضافة المحل
+        </Button>
+      </form>
+    </Modal>
   );
 }
 
-function Users() {
+// ———— الموظفين ————
+const ROLE_TONE: Record<Role, 'brand' | 'info' | 'success' | 'violet' | 'neutral'> = {
+  admin: 'violet',
+  ops: 'info',
+  store: 'brand',
+  driver: 'success',
+  customer: 'neutral',
+};
+
+function UsersTab() {
   const users = useQuery({
     queryKey: ['admin-users'],
     queryFn: () => get<AdminUser[]>('/admin/users'),
   });
-  const stores = useQuery({
-    queryKey: ['admin-stores'],
-    queryFn: () => get<AdminStore[]>('/admin/stores'),
-  });
   const saver = useSaver('admin-users');
+  const dialog = useDialog();
+  const [adding, setAdding] = useState(false);
   const update = useMutation({
     mutationFn: (v: { id: string; body: { isActive?: boolean; password?: string } }) =>
       patch(`/admin/users/${v.id}`, v.body),
     ...saver,
   });
+
+  async function resetPassword(u: AdminUser) {
+    const password = await dialog.prompt({
+      title: `كلمة سر جديدة لـ ${u.name}`,
+      description: 'هيخرج من كل أجهزته، وابعتله كلمة السر الجديدة بنفسك',
+      label: 'كلمة السر الجديدة',
+      type: 'password',
+      minLength: 10,
+      icon: KeyRound,
+    });
+    if (password) update.mutate({ id: u.id, body: { password } });
+  }
+
+  if (users.isPending) return <SkeletonList count={5} className="h-16" />;
+  if (users.error) return <ErrorBox error={users.error} />;
+  return (
+    <>
+      <TableCard
+        title={`الموظفين (${num(users.data.length)})`}
+        icon={Users}
+        action={
+          <Button size="sm" icon={UserPlus} onClick={() => setAdding(true)}>
+            حساب جديد
+          </Button>
+        }
+      >
+        {users.data.map((u) => (
+          <div key={u.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+            <Avatar name={u.name} size="sm" />
+            <div className="min-w-0 flex-1">
+              <div className={cx('font-medium', !u.isActive && 'text-ink-400 line-through')}>
+                {u.name}
+              </div>
+              <div className="text-xs text-ink-500">
+                <span dir="ltr">{u.phone}</span>
+              </div>
+            </div>
+            <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABELS[u.role]}</Badge>
+            <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => void resetPassword(u)}>
+              كلمة سر
+            </Button>
+            <Switch
+              checked={u.isActive}
+              onChange={(v) => update.mutate({ id: u.id, body: { isActive: v } })}
+              label={`${u.name} شغال`}
+            />
+          </div>
+        ))}
+      </TableCard>
+      <NewUserModal open={adding} onClose={() => setAdding(false)} />
+    </>
+  );
+}
+
+function NewUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const stores = useQuery({
+    queryKey: ['admin-stores'],
+    queryFn: () => get<AdminStore[]>('/admin/stores'),
+    enabled: open,
+  });
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -324,96 +490,66 @@ function Users() {
   const create = useMutation({
     mutationFn: () =>
       post('/admin/users', { ...form, storeId: form.role === 'store' ? form.storeId : undefined }),
-    ...saver,
+    onSuccess: () => {
+      toast('الحساب اتعمل');
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setForm({ ...form, name: '', phone: '', password: '' });
+      onClose();
+    },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
     create.mutate();
   }
-
-  if (users.isPending) return <Loading />;
-  if (users.error) return <ErrorBox error={users.error} />;
   return (
-    <div className="space-y-4">
-      <PageTitle>حسابات الموظفين</PageTitle>
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-        {users.data.map((u) => (
-          <div key={u.id} className="flex items-center gap-3 p-3">
-            <div className="flex-1">
-              <div className={`font-medium ${u.isActive ? '' : 'text-slate-400 line-through'}`}>
-                {u.name}
-              </div>
-              <div className="text-xs text-slate-500">
-                <span dir="ltr">{u.phone}</span> · {ROLE_LABELS[u.role]}
-              </div>
-            </div>
-            <button
-              className="text-sm text-brand-700 underline"
-              onClick={() => {
-                const password = prompt(`كلمة سر جديدة لـ ${u.name} (١٠ حروف على الأقل):`);
-                if (password && password.length >= 10)
-                  update.mutate({ id: u.id, body: { password } });
-              }}
-            >
-              كلمة سر جديدة
-            </button>
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                className="size-5 accent-brand-600"
-                checked={u.isActive}
-                onChange={(e) => update.mutate({ id: u.id, body: { isActive: e.target.checked } })}
-              />
-              شغال
-            </label>
-          </div>
-        ))}
-      </div>
-      <Card>
-        <h2 className="mb-3 font-semibold">حساب جديد</h2>
-        <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit}>
-          <Input
-            label="الاسم"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-          />
-          <Input
-            label="الموبايل"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            inputMode="tel"
-            dir="ltr"
-            required
-          />
+    <Modal open={open} onClose={onClose} title="حساب موظف جديد" icon={UserPlus} size="lg">
+      <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="الاسم"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+        <Input
+          label="الموبايل"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          inputMode="tel"
+          dir="ltr"
+          required
+        />
+        <Select
+          label="الدور"
+          value={form.role}
+          onChange={(e) => setForm({ ...form, role: e.target.value as typeof form.role })}
+        >
+          {(['driver', 'store', 'ops', 'admin'] as const).map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </Select>
+        {form.role === 'store' ? (
           <Select
-            label="الدور"
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value as typeof form.role })}
+            label="المحل"
+            value={form.storeId}
+            onChange={(e) => setForm({ ...form, storeId: e.target.value })}
+            required
           >
-            {(['driver', 'store', 'ops', 'admin'] as const).map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
+            <option value="">اختار المحل</option>
+            {stores.data?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </Select>
-          {form.role === 'store' && (
-            <Select
-              label="المحل"
-              value={form.storeId}
-              onChange={(e) => setForm({ ...form, storeId: e.target.value })}
-              required
-            >
-              <option value="">اختار</option>
-              {stores.data?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          )}
+        ) : (
+          <div className="hidden sm:block" />
+        )}
+        <div className="sm:col-span-2">
           <Input
-            label="كلمة السر (١٠ حروف على الأقل)"
+            label="كلمة السر"
+            hint="١٠ حروف على الأقل. الموظف يقدر يغيّرها بعد أول دخول."
             type="password"
             autoComplete="new-password"
             value={form.password}
@@ -422,27 +558,31 @@ function Users() {
             required
             dir="ltr"
           />
-          {create.error && (
-            <div className="sm:col-span-2">
-              <ErrorBox error={create.error} />
-            </div>
-          )}
-          <Button type="submit" loading={create.isPending} className="sm:col-span-2">
-            إنشاء الحساب
-          </Button>
-        </form>
-      </Card>
-    </div>
+        </div>
+        {create.error && (
+          <div className="sm:col-span-2">
+            <ErrorBox error={create.error} />
+          </div>
+        )}
+        <Button type="submit" size="lg" loading={create.isPending} className="sm:col-span-2">
+          إنشاء الحساب
+        </Button>
+      </form>
+    </Modal>
   );
 }
 
+// ———— سجل العمليات ————
 const ACTION_LABELS: Record<string, string> = {
   'auth.login': 'دخول',
   'auth.login_failed': 'محاولة دخول فاشلة',
   'auth.account_locked': 'قفل حساب بسبب محاولات غلط',
-  'auth.refresh_reuse_detected': '🚨 محاولة استخدام جلسة مسروقة',
-  'auth.login_otp': 'دخول عميل بالكود',
+  'auth.login_blocked_locked': 'محاولة دخول لحساب مقفول',
+  'auth.refresh_reuse_detected': 'محاولة استخدام جلسة مسروقة',
+  'auth.login_otp': 'دخول بالكود',
   'auth.register': 'تسجيل عميل جديد',
+  'auth.password_changed': 'تغيير كلمة السر',
+  'auth.password_change_failed': 'محاولة فاشلة لتغيير كلمة السر',
   'order.placed': 'طلب جديد',
   'order.accepted': 'قبول طلب',
   'order.rejected': 'رفض طلب',
@@ -452,48 +592,61 @@ const ACTION_LABELS: Record<string, string> = {
   'order.delivered': 'تسليم وتحصيل',
   'order.cancelled': 'إلغاء طلب',
   'finance.driver_settled': 'تسوية عهدة طيار',
-  'finance.store_payout': 'صرف لمحل',
+  'finance.store_payout': 'تحويل لمحل',
   'finance.cash_diff_write_off': 'شطب فرق تحصيل',
   'finance.cash_diff_charge_driver': 'تحميل فرق على طيار',
   'product.updated': 'تعديل منتج',
   'product.created': 'منتج جديد',
+  'store.opened': 'فتح المحل',
+  'store.closed': 'قفل المحل',
+  'zone.created': 'منطقة جديدة',
   'zone.updated': 'تعديل منطقة',
+  'store.created': 'محل جديد',
   'store.updated': 'تعديل محل',
   'user.created': 'حساب جديد',
   'user.updated': 'تعديل حساب',
-  'user.password_reset': 'تعيين كلمة سر جديدة لموظف',
-  'auth.password_changed': 'تغيير كلمة السر',
-  'auth.password_change_failed': 'محاولة فاشلة لتغيير كلمة السر',
+  'user.password_reset': 'كلمة سر جديدة لموظف',
 };
+
+function actionTone(action: string): 'danger' | 'success' | 'warning' | 'info' | 'neutral' {
+  if (/failed|locked|reuse|rejected|cancelled|write_off/.test(action)) return 'danger';
+  if (action.startsWith('finance.')) return 'warning';
+  if (action.startsWith('order.')) return 'info';
+  if (/created|register/.test(action)) return 'success';
+  return 'neutral';
+}
 
 function Audit() {
   const logs = useQuery({
     queryKey: ['admin-audit'],
     queryFn: () => get<AuditRow[]>('/admin/audit-logs?limit=200'),
   });
-  if (logs.isPending) return <Loading />;
+  if (logs.isPending) return <SkeletonList count={6} className="h-12" />;
   if (logs.error) return <ErrorBox error={logs.error} />;
   return (
-    <div>
-      <PageTitle>سجل العمليات الحساسة</PageTitle>
-      <p className="mb-3 text-sm text-slate-500">
-        كل عملية مهمة متسجلة هنا، ومحدش يقدر يعدّل أو يمسح منها حاجة.
+    <TableCard title="سجل العمليات الحساسة" icon={ScrollText}>
+      <p className="bg-ink-50 px-5 py-3 text-sm text-ink-600">
+        كل عملية مهمة متسجلة هنا. محدش يقدر يعدّل أو يمسح منها حاجة، ولا حتى مدير الشركة.
       </p>
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white text-sm ring-1 ring-slate-200">
-        {logs.data.map((l) => (
-          <div key={l.id} className="flex flex-wrap gap-x-3 p-3">
-            <span className="tabular text-slate-500">{dateTime(l.createdAt)}</span>
-            <b>{ACTION_LABELS[l.action] ?? l.action}</b>
-            <span>
-              {l.actorName ?? 'غير معروف'}
-              {l.actorRole ? ` (${ROLE_LABELS[l.actorRole as Role] ?? l.actorRole})` : ''}
-            </span>
-            <span className="text-slate-400" dir="ltr">
-              {l.ip}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
+      {logs.data.map((l) => (
+        <div key={l.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm">
+          <Activity className="size-4 text-ink-300" />
+          <Badge tone={actionTone(l.action)}>{ACTION_LABELS[l.action] ?? l.action}</Badge>
+          <span className="flex-1 text-ink-700">
+            {l.actorName ?? 'غير معروف'}
+            {l.actorRole && (
+              <span className="text-ink-400">
+                {' '}
+                · {ROLE_LABELS[l.actorRole as Role] ?? l.actorRole}
+              </span>
+            )}
+          </span>
+          <span className="tabular text-xs text-ink-400">{dateTime(l.createdAt)}</span>
+          <span className="text-xs text-ink-300" dir="ltr">
+            {l.ip}
+          </span>
+        </div>
+      ))}
+    </TableCard>
   );
 }

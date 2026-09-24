@@ -21,6 +21,15 @@ export interface StoreSummary {
   type: StoreType;
   isOpen: boolean;
   zoneName?: string;
+  rating?: number | null;
+  ratingCount?: number;
+}
+
+export interface TenantPublic {
+  name: string;
+  slug: string;
+  governorate: string;
+  otpEnabled: boolean;
 }
 
 export interface Product {

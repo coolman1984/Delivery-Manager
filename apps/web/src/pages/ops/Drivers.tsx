@@ -1,17 +1,27 @@
 import { DRIVER_STATUS_LABELS } from '@dm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Bike, HandCoins, Phone, Wallet } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Modal } from '../../components/dialog';
 import { useToast } from '../../components/toast';
-import { Button, Card, ErrorBox, Loading, PageTitle } from '../../components/ui';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBox,
+  Input,
+  Kpi,
+  Money,
+  PageHeader,
+  SkeletonList,
+} from '../../components/ui';
 import { get, post } from '../../lib/api';
-import { dateTime, money, toPiasters } from '../../lib/format';
+import { ago, money, num, toPiasters } from '../../lib/format';
 import type { DriverOverview } from '../../lib/types';
 
-const statusDot = {
-  available: 'bg-emerald-500',
-  busy: 'bg-amber-500',
-  offline: 'bg-slate-300',
-} as const;
+const STATUS_TONE = { available: 'success', busy: 'warning', offline: 'neutral' } as const;
 
 export default function Drivers() {
   const drivers = useQuery({
@@ -19,85 +29,137 @@ export default function Drivers() {
     queryFn: () => get<DriverOverview[]>('/ops/finance/drivers'),
     refetchInterval: 30_000,
   });
-  if (drivers.isPending) return <Loading />;
-  if (drivers.error) return <ErrorBox error={drivers.error} />;
+  const [settling, setSettling] = useState<DriverOverview | null>(null);
+
+  const list = drivers.data ?? [];
+  const totalCash = list.reduce((s, d) => s + d.cashBalance, 0);
+  const online = list.filter((d) => d.status !== 'offline').length;
+
   return (
     <div>
-      <PageTitle>الطيارين والعهدة</PageTitle>
-      <p className="mb-4 text-sm text-slate-500">
-        العهدة = كل الفلوس اللي الطيار حصّلها من العملاء ولسه ماسلّمهاش. آخر اليوم اعمل تسوية لكل
-        طيار.
-      </p>
-      <div className="grid gap-3 md:grid-cols-2">
-        {drivers.data.map((d) => (
-          <DriverCard key={d.id} driver={d} />
+      <PageHeader
+        title="الطيارين والعهدة"
+        subtitle="العهدة = الفلوس اللي الطيار حصّلها ولسه ماسلّمهاش. اعمل تسوية لكل طيار آخر اليوم."
+      />
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Kpi
+          icon={Bike}
+          tone="success"
+          label="شغالين دلوقتي"
+          value={`${num(online)} من ${num(list.length)}`}
+        />
+        <Kpi icon={Wallet} tone="warning" label="إجمالي العهدة برّه" value={money(totalCash)} />
+      </div>
+      {drivers.isPending && <SkeletonList count={3} className="h-32 rounded-3xl" />}
+      {drivers.error && <ErrorBox error={drivers.error} />}
+      {drivers.data?.length === 0 && (
+        <EmptyState icon={Bike} title="مفيش طيارين" text="ضيف طيارين من لوحة الإدارة" />
+      )}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {list.map((d) => (
+          <Card key={d.id} className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <Avatar name={d.name} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-bold">{d.name}</div>
+                <div className="text-xs text-ink-500">آخر ظهور {ago(d.lastSeenAt)}</div>
+              </div>
+              <Badge tone={STATUS_TONE[d.status]} dot>
+                {DRIVER_STATUS_LABELS[d.status]}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-2xl bg-ink-50 p-3">
+                <div className="text-xs text-ink-500">طلبات شغالة</div>
+                <div className="tabular font-bold">{num(d.activeOrders)}</div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-3">
+                <div className="text-xs text-amber-800">العهدة</div>
+                <Money value={d.cashBalance} className="font-bold text-amber-900" />
+              </div>
+            </div>
+            <div className="mt-auto flex gap-2">
+              <Button
+                variant="primary"
+                icon={HandCoins}
+                className="flex-1"
+                disabled={d.cashBalance <= 0}
+                onClick={() => setSettling(d)}
+              >
+                استلام وتسوية
+              </Button>
+              <a href={`tel:${d.phone}`}>
+                <Button variant="secondary" icon={Phone} aria-label={`اتصل بـ ${d.name}`} />
+              </a>
+            </div>
+          </Card>
         ))}
       </div>
+      {settling && <SettleModal driver={settling} onClose={() => setSettling(null)} />}
     </div>
   );
 }
 
-function DriverCard({ driver }: { driver: DriverOverview }) {
+function SettleModal({ driver, onClose }: { driver: DriverOverview; onClose: () => void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(String(driver.cashBalance / 100));
+  const value = toPiasters(amount);
+  const valid = Number.isInteger(value) && value <= driver.cashBalance;
+  const shortage = valid ? driver.cashBalance - value : 0;
+
   const settle = useMutation({
-    mutationFn: (receivedAmount: number) =>
-      post<{ shortage: number }>(`/ops/finance/drivers/${driver.id}/settle`, { receivedAmount }),
+    mutationFn: () =>
+      post<{ shortage: number }>(`/ops/finance/drivers/${driver.id}/settle`, {
+        receivedAmount: value,
+      }),
     onSuccess: (res) => {
       toast(
         res.shortage > 0
           ? `اتسجلت التسوية، وفاضل عليه ${money(res.shortage)}`
-          : 'اتسجلت التسوية ✅',
+          : 'اتسجلت التسوية والعهدة اتقفلت',
       );
-      setAmount('');
       void queryClient.invalidateQueries({ queryKey: ['finance'] });
+      onClose();
     },
     onError: (e) => toast(e.message, 'error'),
   });
 
-  function submit() {
-    const value = toPiasters(amount);
-    if (!Number.isInteger(value)) return toast('المبلغ غلط', 'error');
-    if (confirm(`تأكيد استلام ${money(value)} من ${driver.name}؟`)) settle.mutate(value);
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (valid) settle.mutate();
   }
 
   return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <div className="font-semibold">
-          <span className={`me-2 inline-block size-2.5 rounded-full ${statusDot[driver.status]}`} />
-          {driver.name}
+    <Modal open onClose={onClose} title={`تسوية عهدة ${driver.name}`} icon={HandCoins}>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="flex items-center justify-between rounded-2xl bg-ink-50 p-4">
+          <span className="text-sm text-ink-600">المفروض يسلّم</span>
+          <Money value={driver.cashBalance} className="text-xl font-bold" />
         </div>
-        <span className="text-xs text-slate-500">
-          {DRIVER_STATUS_LABELS[driver.status]} · {driver.activeOrders} طلب شغال
-        </span>
-      </div>
-      <div className="mt-1 text-xs text-slate-500">
-        <a href={`tel:${driver.phone}`} dir="ltr">
-          {driver.phone}
-        </a>{' '}
-        · آخر ظهور: {dateTime(driver.lastSeenAt)}
-      </div>
-      <div className="tabular mt-3 rounded-xl bg-amber-50 p-3 text-center">
-        العهدة: <b className="text-lg">{money(driver.cashBalance)}</b>
-      </div>
-      {driver.cashBalance > 0 && (
-        <div className="mt-3 flex gap-2">
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder={String(driver.cashBalance / 100)}
-            inputMode="decimal"
-            dir="ltr"
-            className="tabular min-h-11 w-full flex-1 rounded-xl border border-slate-300 px-3"
-            aria-label="المبلغ المستلم بالجنيه"
-          />
-          <Button loading={settle.isPending} onClick={submit}>
-            استلام وتسوية
-          </Button>
-        </div>
-      )}
-    </Card>
+        <Input
+          label="المبلغ اللي استلمته فعلاً"
+          suffix="ج.م"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          inputMode="decimal"
+          dir="ltr"
+          className="tabular h-14 text-center text-xl font-bold"
+          error={Number.isInteger(value) && !valid ? 'أكبر من العهدة' : undefined}
+        />
+        {shortage > 0 && (
+          <div className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
+            هيفضل عجز{' '}
+            <b>
+              <Money value={shortage} />
+            </b>{' '}
+            متسجل على الطيار لحد ما يسدده.
+          </div>
+        )}
+        <Button type="submit" size="lg" block disabled={!valid} loading={settle.isPending}>
+          تأكيد الاستلام
+        </Button>
+      </form>
+    </Modal>
   );
 }

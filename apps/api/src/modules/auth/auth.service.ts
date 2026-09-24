@@ -1,7 +1,14 @@
 import type { Role } from '@dm/shared';
-import type { ChangePasswordInput, LoginInput, OtpVerifyInput } from '@dm/shared/schemas';
+import type {
+  ChangePasswordInput,
+  LoginInput,
+  OtpVerifyInput,
+  RegisterInput,
+} from '@dm/shared/schemas';
 import {
   BadRequestException,
+  ConflictException,
+  NotFoundException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -76,6 +83,7 @@ export class AuthService {
     phone: string,
     meta: RequestMeta,
   ): Promise<{ sent: true; devCode?: string }> {
+    this.assertOtpEnabled();
     await this.limiter.hit(`otp-req:ip:${meta.ip}`, 10, 3600);
     await this.limiter.hit(`otp-req:phone:${tenant.id}:${phone}`, 3, 900);
 
@@ -102,6 +110,7 @@ export class AuthService {
     input: OtpVerifyInput,
     meta: RequestMeta,
   ): Promise<IssuedSession> {
+    this.assertOtpEnabled();
     await this.limiter.hit(`otp-verify:ip:${meta.ip}`, 30, 900);
     const key = this.otpKey(tenant.id, input.phone);
     const raw = await this.redis.client.get(key);
@@ -170,7 +179,43 @@ export class AuthService {
     return session;
   }
 
-  // ———— دخول الموظفين بكلمة سر ————
+  // ———— تسجيل عميل جديد بكلمة سر (لحد ما الرسائل تشتغل) ————
+
+  async register(
+    tenant: TenantInfo,
+    input: RegisterInput,
+    meta: RequestMeta,
+  ): Promise<IssuedSession> {
+    await this.limiter.hit(`register:ip:${meta.ip}`, 10, 3600);
+    const passwordHash = await argon2.hash(input.password, ARGON2_OPTIONS);
+    return this.dbs.withTenant(tenant.id, async (tx) => {
+      if (await this.findByPhone(tx, input.phone)) {
+        throw new ConflictException('الرقم ده متسجل قبل كده، ادخل بكلمة السر');
+      }
+      const [user] = await tx
+        .insert(users)
+        .values({
+          tenantId: tenant.id,
+          phone: input.phone,
+          name: input.name,
+          role: 'customer',
+          passwordHash,
+        })
+        .returning();
+      await this.audit.log(tx, {
+        tenantId: tenant.id,
+        actorId: user!.id,
+        actorRole: 'customer',
+        ...meta,
+        action: 'auth.register',
+        entityType: 'user',
+        entityId: user!.id,
+      });
+      return this.issueSession(tx, user!, meta);
+    });
+  }
+
+  // ———— الدخول بكلمة سر (الموظفين والعملاء) ————
 
   async login(tenant: TenantInfo, input: LoginInput, meta: RequestMeta): Promise<IssuedSession> {
     await this.limiter.hit(`login:ip:${meta.ip}`, 30, 900);
@@ -181,7 +226,7 @@ export class AuthService {
       const user = await this.findByPhone(tx, input.phone);
       const auditBase = { tenantId: tenant.id, ...meta, entityType: 'user' };
 
-      if (!user || !user.passwordHash || user.role === 'customer') {
+      if (!user || !user.passwordHash) {
         await argon2.verify(await this.dummyHash, input.password);
         await this.audit.log(tx, {
           ...auditBase,
@@ -405,6 +450,10 @@ export class AuthService {
   private async findByPhone(tx: Tx, phone: string): Promise<UserRow | undefined> {
     const [row] = await tx.select().from(users).where(eq(users.phone, phone)).limit(1);
     return row;
+  }
+
+  private assertOtpEnabled(): void {
+    if (!this.env.OTP_ENABLED) throw new NotFoundException('الدخول بالكود مش متاح حالياً');
   }
 
   private otpKey(tenantId: string, phone: string): string {

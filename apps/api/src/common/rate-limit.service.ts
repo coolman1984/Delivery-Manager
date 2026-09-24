@@ -23,7 +23,7 @@ export class RateLimitService {
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `محاولات كتير. جرّب تاني بعد ${Math.ceil(retryAfter / 60)} دقيقة`,
+          message: `محاولات كتير. جرّب تاني بعد ${Math.ceil(retryAfter / 60).toLocaleString('ar-EG')} دقيقة`,
           retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,

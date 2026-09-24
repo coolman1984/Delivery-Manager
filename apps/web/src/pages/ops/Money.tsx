@@ -1,9 +1,23 @@
-import { STORE_TYPE_LABELS, type StoreType } from '@dm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Banknote, CircleCheck, HandCoins, Receipt, Store, TriangleAlert } from 'lucide-react';
+import { useDialog } from '../../components/dialog';
 import { useToast } from '../../components/toast';
-import { Button, Card, Empty, ErrorBox, Loading, PageTitle } from '../../components/ui';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBox,
+  Kpi,
+  Money as MoneyText,
+  PageHeader,
+  SectionTitle,
+  SkeletonList,
+} from '../../components/ui';
 import { get, post } from '../../lib/api';
-import { dateTime, money, time, toPiasters } from '../../lib/format';
+import { dateTime, money, num, orderNo, time, toPiasters } from '../../lib/format';
+import { STORE_VISUAL } from '../../lib/visuals';
+import type { StoreType } from '@dm/shared';
 
 interface CashDiff {
   orderId: string;
@@ -31,6 +45,7 @@ interface Settlement {
 export default function Money() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const dialog = useDialog();
   const diffs = useQuery({
     queryKey: ['finance', 'diffs'],
     queryFn: () => get<CashDiff[]>('/ops/finance/cash-differences'),
@@ -48,112 +63,207 @@ export default function Money() {
   const resolve = useMutation({
     mutationFn: (v: { orderId: string; decision: 'write_off' | 'charge_driver' }) =>
       post(`/ops/finance/cash-differences/${v.orderId}/resolve`, { decision: v.decision }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      toast('اتحسم الفرق');
+      refresh();
+    },
     onError: (e) => toast(e.message, 'error'),
   });
   const payout = useMutation({
     mutationFn: (v: { storeId: string; amount: number }) =>
       post(`/ops/finance/stores/${v.storeId}/payout`, { amount: v.amount }),
     onSuccess: () => {
-      toast('اتسجل الصرف ✅');
+      toast('اتسجل التحويل للمحل');
       refresh();
     },
     onError: (e) => toast(e.message, 'error'),
   });
 
+  const owed = stores.data?.reduce((s, x) => s + x.payable, 0) ?? 0;
+  const received = settlements.data?.reduce((s, x) => s + x.receivedAmount, 0) ?? 0;
+
+  async function askPayout(s: StoreBalance) {
+    const value = await dialog.prompt({
+      title: `تحويل لـ ${s.name}`,
+      description: `المستحق: ${money(s.payable)}`,
+      label: 'المبلغ المحوّل',
+      defaultValue: String(s.payable / 100),
+      inputMode: 'decimal',
+      icon: Store,
+      confirmLabel: 'تسجيل التحويل',
+      validate: (v) => {
+        const p = toPiasters(v);
+        if (!Number.isInteger(p) || p <= 0) return 'اكتب مبلغ صحيح';
+        return p > s.payable ? 'أكبر من المستحق' : null;
+      },
+    });
+    if (value) payout.mutate({ storeId: s.id, amount: toPiasters(value) });
+  }
+
   return (
-    <div className="space-y-6">
-      <section>
-        <PageTitle>⚠️ فروقات التحصيل</PageTitle>
-        {diffs.isPending ? (
-          <Loading />
-        ) : diffs.error ? (
-          <ErrorBox error={diffs.error} />
-        ) : diffs.data.length === 0 ? (
-          <Empty icon="✅" text="مفيش فروقات" />
-        ) : (
-          <div className="space-y-2">
-            {diffs.data.map((d) => (
-              <Card key={d.orderId} className="tabular flex flex-wrap items-center gap-3">
-                <div className="flex-1 text-sm">
-                  طلب #{d.number} · {d.driverName} · {time(d.deliveredAt)}
+    <div>
+      <PageHeader
+        title="الفلوس"
+        subtitle="كل جنيه متسجل: جاي منين ورايح فين، ومحدش يقدر يعدّل فيه"
+      />
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Kpi
+          icon={Store}
+          tone="brand"
+          label="مستحقات المحلات"
+          value={money(owed)}
+          hint="لسه ماتحوّلتش"
+        />
+        <Kpi
+          icon={HandCoins}
+          tone="success"
+          label="استلمنا من الطيارين النهارده"
+          value={money(received)}
+        />
+        <Kpi
+          icon={TriangleAlert}
+          tone={diffs.data?.length ? 'danger' : 'neutral'}
+          label="فروقات مستنية قرار"
+          value={diffs.data?.length ? num(diffs.data.length) : 'مفيش'}
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <SectionTitle icon={TriangleAlert}>فروقات التحصيل</SectionTitle>
+          {diffs.isPending && <SkeletonList count={2} className="h-16" />}
+          {diffs.error && <ErrorBox error={diffs.error} />}
+          {diffs.data?.length === 0 && (
+            <EmptyState
+              icon={CircleCheck}
+              title="مفيش فروقات"
+              text="كل الطيارين حصّلوا المبلغ كامل"
+            />
+          )}
+          <div className="space-y-3">
+            {diffs.data?.map((d) => (
+              <div key={d.orderId} className="rounded-2xl bg-ink-50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">طلب {orderNo(d.number)}</span>
+                  <span className="text-xs text-ink-500">
+                    {d.driverName} · {time(d.deliveredAt)}
+                  </span>
+                </div>
+                <div className="tabular mt-2 grid grid-cols-3 gap-2 text-center text-sm">
                   <div>
-                    المطلوب {money(d.total)} · اتحصّل {money(d.cashCollected)} ·{' '}
-                    <b className="text-red-600">الفرق {money(d.total - d.cashCollected)}</b>
+                    <div className="text-xs text-ink-500">المطلوب</div>
+                    <MoneyText value={d.total} />
+                  </div>
+                  <div>
+                    <div className="text-xs text-ink-500">اتحصّل</div>
+                    <MoneyText value={d.cashCollected} />
+                  </div>
+                  <div>
+                    <div className="text-xs text-rose-600">الفرق</div>
+                    <MoneyText
+                      value={d.total - d.cashCollected}
+                      className="font-bold text-rose-700"
+                    />
                   </div>
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => resolve.mutate({ orderId: d.orderId, decision: 'charge_driver' })}
-                >
-                  على الطيار
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    confirm('شطب الفرق كخسارة على الشركة؟') &&
-                    resolve.mutate({ orderId: d.orderId, decision: 'write_off' })
-                  }
-                >
-                  شطب
-                </Button>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <PageTitle>🏪 مستحقات المحلات</PageTitle>
-        {stores.isPending ? (
-          <Loading />
-        ) : stores.error ? (
-          <ErrorBox error={stores.error} />
-        ) : (
-          <div className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-            {stores.data.map((s) => (
-              <div key={s.id} className="tabular flex items-center gap-3 p-3">
-                <div className="flex-1">
-                  <div className="font-medium">{s.name}</div>
-                  <div className="text-xs text-slate-500">{STORE_TYPE_LABELS[s.type]}</div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="dark"
+                    className="flex-1"
+                    onClick={() =>
+                      resolve.mutate({ orderId: d.orderId, decision: 'charge_driver' })
+                    }
+                  >
+                    على الطيار
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={async () => {
+                      const ok = await dialog.confirm({
+                        title: 'شطب الفرق؟',
+                        description: `هيتسجل ${money(d.total - d.cashCollected)} خسارة على الشركة.`,
+                        confirmLabel: 'شطب',
+                        danger: true,
+                      });
+                      if (ok) resolve.mutate({ orderId: d.orderId, decision: 'write_off' });
+                    }}
+                  >
+                    شطب على الشركة
+                  </Button>
                 </div>
-                <b>{money(s.payable)}</b>
-                <Button
-                  variant="secondary"
-                  disabled={s.payable <= 0}
-                  onClick={() => {
-                    const input = prompt(
-                      `المبلغ المصروف لـ ${s.name} بالجنيه:`,
-                      String(s.payable / 100),
-                    );
-                    const amount = input ? toPiasters(input) : NaN;
-                    if (Number.isInteger(amount) && amount > 0)
-                      payout.mutate({ storeId: s.id, amount });
-                  }}
-                >
-                  صرف
-                </Button>
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </Card>
 
-      <section>
-        <PageTitle>🧾 تسويات النهارده</PageTitle>
-        {settlements.data?.length === 0 && <Empty text="مفيش تسويات النهارده لسه" />}
-        <div className="space-y-2">
-          {settlements.data?.map((s) => (
-            <Card key={s.id} className="tabular text-sm">
-              <b>{s.driverName}</b> · {dateTime(s.createdAt)}
-              <div>
-                المفروض {money(s.expectedAmount)} · استلمنا {money(s.receivedAmount)}
-                {s.shortage > 0 && <b className="text-red-600"> · عجز {money(s.shortage)}</b>}
+        <Card>
+          <SectionTitle icon={Store}>مستحقات المحلات</SectionTitle>
+          <p className="-mt-1 mb-3 text-sm text-ink-500">
+            حق كل محل بعد خصم العمولة. سجّل التحويل هنا أول ما تحوّل له.
+          </p>
+          {stores.isPending && <SkeletonList count={3} className="h-14" />}
+          <div className="divide-y divide-ink-100">
+            {stores.data?.map((s) => {
+              const v = STORE_VISUAL[s.type];
+              return (
+                <div key={s.id} className="flex items-center gap-3 py-3">
+                  <span className={`flex size-10 items-center justify-center rounded-xl ${v.tile}`}>
+                    <v.icon className={`size-5 ${v.iconColor}`} />
+                  </span>
+                  <span className="flex-1 font-medium">{s.name}</span>
+                  <MoneyText value={s.payable} className="font-bold" />
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    icon={Banknote}
+                    disabled={s.payable <= 0}
+                    onClick={() => void askPayout(s)}
+                  >
+                    تحويل
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card className="xl:col-span-2">
+          <SectionTitle icon={Receipt}>تسويات النهارده</SectionTitle>
+          {settlements.data?.length === 0 && (
+            <p className="py-6 text-center text-sm text-ink-500">مفيش تسويات النهارده لسه</p>
+          )}
+          <div className="divide-y divide-ink-100">
+            {settlements.data?.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3 py-3">
+                <Avatar name={s.driverName} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{s.driverName}</div>
+                  <div className="text-xs text-ink-500">{dateTime(s.createdAt)}</div>
+                </div>
+                <div className="tabular text-sm">
+                  استلمنا{' '}
+                  <b>
+                    <MoneyText value={s.receivedAmount} />
+                  </b>{' '}
+                  من <MoneyText value={s.expectedAmount} />
+                </div>
+                {s.shortage > 0 ? (
+                  <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                    عجز {money(s.shortage)}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    مقفولة
+                  </span>
+                )}
               </div>
-            </Card>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

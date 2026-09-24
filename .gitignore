@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+
+# أسرار: ممنوع رفعها
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+backups/

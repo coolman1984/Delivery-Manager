@@ -1,0 +1,55 @@
+import { Controller, Get, Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthGuard } from './common/auth.guard';
+import { CommonModule } from './common/common.module';
+import { Public } from './common/decorators';
+import { AllExceptionsFilter } from './common/http-exception.filter';
+import { IpRateLimitGuard } from './common/ip-rate-limit.guard';
+import { loadEnv } from './config/env';
+import { AdminModule } from './modules/admin/admin.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { DriversModule } from './modules/drivers/drivers.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
+
+@Controller('health')
+class HealthController {
+  @Public()
+  @Get()
+  health() {
+    return { ok: true };
+  }
+}
+
+@Module({
+  imports: [
+    CommonModule,
+    JwtModule.registerAsync({
+      global: true,
+      useFactory: () => ({
+        secret: loadEnv().JWT_ACCESS_SECRET,
+        signOptions: { algorithm: 'HS256' },
+        verifyOptions: { algorithms: ['HS256'] },
+      }),
+    }),
+    RealtimeModule,
+    AuthModule,
+    CatalogModule,
+    CustomersModule,
+    OrdersModule,
+    DriversModule,
+    FinanceModule,
+    AdminModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: IpRateLimitGuard },
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
+})
+export class AppModule {}

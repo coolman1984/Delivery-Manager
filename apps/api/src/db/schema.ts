@@ -1,4 +1,4 @@
-import { DRIVER_STATUSES, ORDER_STATUSES, ROLES, STORE_TYPES } from '@dm/shared';
+import { COUPON_KINDS, DRIVER_STATUSES, ORDER_STATUSES, ROLES, STORE_TYPES } from '@dm/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -260,6 +260,10 @@ export const orders = pgTable(
     subtotal: integer('subtotal').notNull(),
     deliveryFee: integer('delivery_fee').notNull(),
     discount: integer('discount').notNull().default(0),
+    couponId: uuid('coupon_id'),
+    couponDiscount: integer('coupon_discount').notNull().default(0),
+    pointsUsed: integer('points_used').notNull().default(0),
+    pointsDiscount: integer('points_discount').notNull().default(0),
     total: integer('total').notNull(),
     commissionBps: integer('commission_bps').notNull(),
     commissionAmount: integer('commission_amount').notNull(),
@@ -465,6 +469,10 @@ export const tenantSettings = pgTable('tenant_settings', {
   errandsEnabled: boolean('errands_enabled').notNull().default(true),
   // سعر إضافي للمشوار فوق سعر توصيل المنطقة
   errandExtraFee: integer('errand_extra_fee').notNull().default(0),
+  // نقاط الولاء: نقطة لكل (earnPer) قرش، وقيمة النقطة (pointValue) قرش
+  loyaltyEnabled: boolean('loyalty_enabled').notNull().default(true),
+  loyaltyEarnPer: integer('loyalty_earn_per').notNull().default(1000),
+  loyaltyPointValue: integer('loyalty_point_value').notNull().default(10),
   updatedAt: updatedAt(),
 });
 
@@ -483,4 +491,73 @@ export const pushSubscriptions = pgTable(
     createdAt: createdAt(),
   },
   (t) => [unique('push_endpoint').on(t.tenantId, t.endpoint), index('push_user_idx').on(t.userId)],
+);
+
+// ———— الكوبونات والعروض ————
+export const couponKindEnum = pgEnum('coupon_kind', COUPON_KINDS);
+export const coupons = pgTable(
+  'coupons',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    code: text('code').notNull(),
+    title: text('title').notNull(),
+    kind: couponKindEnum('kind').notNull(),
+    value: integer('value').notNull().default(0),
+    maxDiscount: integer('max_discount'),
+    minSubtotal: integer('min_subtotal').notNull().default(0),
+    // لو محدد: الكوبون على محل واحد بس
+    storeId: uuid('store_id').references(() => stores.id),
+    startsAt: timestamp('starts_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    maxUses: integer('max_uses'),
+    perCustomerLimit: integer('per_customer_limit').notNull().default(1),
+    firstOrderOnly: boolean('first_order_only').notNull().default(false),
+    // يظهر في إعلانات الصفحة الرئيسية
+    isPublic: boolean('is_public').notNull().default(true),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('coupons_tenant_code').on(t.tenantId, t.code)],
+);
+
+export const couponRedemptions = pgTable(
+  'coupon_redemptions',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    couponId: uuid('coupon_id')
+      .notNull()
+      .references(() => coupons.id),
+    orderId: uuid('order_id')
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => users.id),
+    amount: integer('amount').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('coupon_redemptions_coupon_idx').on(t.couponId, t.customerId)],
+);
+
+/** دفتر نقاط الولاء: كل حركة (كسب/صرف/استرجاع) سطر، وممنوع التعديل */
+export const loyaltyPoints = pgTable(
+  'loyalty_points',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => users.id),
+    orderId: uuid('order_id').references(() => orders.id),
+    points: integer('points').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('loyalty_customer_idx').on(t.customerId),
+    uniqueIndex('loyalty_order_reason').on(t.orderId, t.reason),
+  ],
 );

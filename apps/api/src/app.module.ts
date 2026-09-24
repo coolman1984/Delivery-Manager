@@ -15,7 +15,9 @@ import { DriversModule } from './modules/drivers/drivers.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { MediaModule } from './modules/media/media.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
 import { PushModule } from './modules/push/push.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -43,6 +45,8 @@ class HealthController {
     RealtimeModule,
     SettingsModule,
     PushModule,
+    MarketingModule,
+    ReportsModule,
     AuthModule,
     CatalogModule,
     CustomersModule,

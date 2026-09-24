@@ -1,6 +1,6 @@
 import { ACTIVE_ORDER_STATUSES } from '@dm/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Bike, LayoutDashboard, Map as MapIcon, Settings, Wallet } from 'lucide-react';
+import { BarChart3, Bike, LayoutDashboard, Map as MapIcon, Settings, Wallet } from 'lucide-react';
 import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { StaffShell } from '../../components/Shell';
@@ -10,6 +10,7 @@ import type { Order } from '../../lib/types';
 import Board from './Board';
 import Drivers from './Drivers';
 import LiveMap from './LiveMap';
+import Reports from './Reports';
 import Money from './Money';
 
 const Admin = lazy(() => import('../admin/Admin'));
@@ -28,6 +29,7 @@ export default function OpsApp() {
     { to: '/ops/map', label: 'الخريطة', icon: MapIcon },
     { to: '/ops/drivers', label: 'الطيارين', icon: Bike },
     { to: '/ops/money', label: 'الفلوس', icon: Wallet },
+    { to: '/ops/reports', label: 'التقارير', icon: BarChart3 },
     ...(isAdmin ? [{ to: '/ops/admin', label: 'الإدارة', icon: Settings, end: false }] : []),
   ];
   return (
@@ -37,6 +39,7 @@ export default function OpsApp() {
         <Route path="map" element={<LiveMap />} />
         <Route path="drivers" element={<Drivers />} />
         <Route path="money" element={<Money />} />
+        <Route path="reports" element={<Reports />} />
         {isAdmin && <Route path="admin/*" element={<Admin />} />}
         <Route path="*" element={<Navigate to="/ops" replace />} />
       </Routes>

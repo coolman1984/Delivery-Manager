@@ -8,6 +8,8 @@ import {
   ShoppingBag,
   StickyNote,
   Wallet,
+  Star,
+  TicketPercent,
 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -24,10 +26,11 @@ import {
   Select,
   SkeletonList,
   Textarea,
+  Switch,
 } from '../../components/ui';
 import { get, post } from '../../lib/api';
 import { useCart } from '../../lib/cart';
-import { money } from '../../lib/format';
+import { money, num } from '../../lib/format';
 import type { Address, Order } from '../../lib/types';
 import { useSelectedAddress } from '../../lib/address';
 import { AddAddressModal } from '../../components/AddressSheet';
@@ -51,7 +54,34 @@ export default function Checkout() {
   const selected = addresses.data?.find(
     (a) => a.id === (addressId || preferred.address?.id || addresses.data?.[0]?.id),
   );
-  const total = cart.subtotal + (selected?.deliveryFee ?? 0);
+  const fee = selected?.deliveryFee ?? 0;
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<{ code: string; title: string; discount: number } | null>(
+    null,
+  );
+  const [usePoints, setUsePoints] = useState(false);
+  const points = useQuery({
+    queryKey: ['points'],
+    queryFn: () => get<{ enabled: boolean; balance: number; pointValue: number }>('/me/points'),
+  });
+  const checkCoupon = useMutation({
+    mutationFn: (code: string) =>
+      post<{ code: string; title: string; discount: number }>('/coupons/check', {
+        code,
+        storeId: cart.storeId,
+        subtotal: cart.subtotal,
+        deliveryFee: fee,
+      }),
+    onSuccess: (c) => setCoupon(c),
+  });
+  const couponDiscount = coupon?.discount ?? 0;
+  const payable = cart.subtotal + fee - couponDiscount;
+  const pv = points.data?.pointValue ?? 0;
+  const pointsDiscount =
+    usePoints && points.data?.enabled && pv > 0
+      ? Math.min(points.data.balance, Math.floor(payable / pv)) * pv
+      : 0;
+  const total = payable - pointsDiscount;
 
   const place = useMutation({
     mutationFn: () =>
@@ -61,6 +91,8 @@ export default function Checkout() {
         addressId: selected?.id,
         items: cart.lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
         ...(note.trim() ? { note: note.trim() } : {}),
+        ...(coupon ? { couponCode: coupon.code } : {}),
+        ...(usePoints ? { usePoints: true } : {}),
       }),
     onSuccess: (order) => {
       cart.clear();
@@ -183,6 +215,66 @@ export default function Checkout() {
             />
           </Card>
 
+          <Card className="space-y-4">
+            <SectionTitle icon={TicketPercent}>كوبون خصم ونقاط</SectionTitle>
+            {coupon ? (
+              <div className="flex items-center gap-3 rounded-2xl bg-sun-100 p-3.5">
+                <TicketPercent className="size-6 text-ink-800" />
+                <div className="flex-1">
+                  <div className="font-bold" dir="ltr">
+                    {coupon.code}
+                  </div>
+                  <div className="text-sm text-ink-600">
+                    {coupon.title} · وفّرت {money(coupon.discount)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCoupon(null)}
+                  className="cursor-pointer text-sm text-rose-600"
+                >
+                  شيل
+                </button>
+              </div>
+            ) : (
+              <form
+                className="flex items-start gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (couponInput.trim()) checkCoupon.mutate(couponInput.trim());
+                }}
+              >
+                <div className="flex-1">
+                  <Input
+                    placeholder="عندك كوبون؟ اكتبه هنا"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    dir="ltr"
+                    aria-label="كود الخصم"
+                    error={checkCoupon.error?.message}
+                  />
+                </div>
+                <Button type="submit" variant="dark" loading={checkCoupon.isPending}>
+                  تطبيق
+                </Button>
+              </form>
+            )}
+            {points.data?.enabled && points.data.balance > 0 && (
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl p-3.5 ring-1 ring-ink-200">
+                <Star className="size-6 fill-sun-400 text-sun-400" />
+                <span className="flex-1">
+                  <span className="block font-semibold">
+                    استخدم نقاطك ({num(points.data.balance)} نقطة)
+                  </span>
+                  <span className="text-sm text-ink-500">
+                    تساوي لحد {money(points.data.balance * points.data.pointValue)}
+                  </span>
+                </span>
+                <Switch checked={usePoints} onChange={setUsePoints} label="استخدم النقاط" />
+              </label>
+            )}
+          </Card>
+
           <Card>
             <SectionTitle icon={Wallet}>طريقة الدفع</SectionTitle>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -217,6 +309,18 @@ export default function Checkout() {
               <dt className="text-ink-500">التوصيل</dt>
               <dd>{selected ? <Money value={selected.deliveryFee} /> : '—'}</dd>
             </div>
+            {couponDiscount > 0 && (
+              <div className="flex justify-between text-brand-700">
+                <dt>خصم الكوبون</dt>
+                <dd>− {money(couponDiscount)}</dd>
+              </div>
+            )}
+            {pointsDiscount > 0 && (
+              <div className="flex justify-between text-brand-700">
+                <dt>خصم النقاط</dt>
+                <dd>− {money(pointsDiscount)}</dd>
+              </div>
+            )}
             <div className="flex justify-between border-t border-dashed border-ink-200 pt-3 text-base font-bold">
               <dt>الإجمالي</dt>
               <dd>

@@ -21,7 +21,13 @@ export class SettingsController {
   features(@CurrentTenant() tenant: TenantInfo) {
     return this.dbs.withTenant(tenant.id, async (tx) => {
       const s = await this.settings.get(tx);
-      return { errandsEnabled: s.errandsEnabled, errandExtraFee: s.errandExtraFee };
+      return {
+        errandsEnabled: s.errandsEnabled,
+        errandExtraFee: s.errandExtraFee,
+        loyaltyEnabled: s.loyaltyEnabled,
+        loyaltyEarnPer: s.loyaltyEarnPer,
+        loyaltyPointValue: s.loyaltyPointValue,
+      };
     });
   }
 

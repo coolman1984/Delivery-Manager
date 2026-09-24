@@ -8,6 +8,7 @@ import {
   Percent,
   Plus,
   ScrollText,
+  TicketPercent,
   Settings2,
   Store,
   UserPlus,
@@ -32,7 +33,7 @@ import {
   Switch,
 } from '../../components/ui';
 import { get, patch, post } from '../../lib/api';
-import { dateTime, num, toPiasters } from '../../lib/format';
+import { dateTime, money, num, toPiasters } from '../../lib/format';
 import type { Zone } from '../../lib/types';
 import { ImagePicker } from '../../components/ImagePicker';
 import { StoreLogo } from '../../components/visual';
@@ -63,7 +64,7 @@ interface AuditRow {
   createdAt: string;
 }
 
-type Tab = 'settings' | 'zones' | 'stores' | 'users' | 'leads' | 'audit';
+type Tab = 'settings' | 'coupons' | 'zones' | 'stores' | 'users' | 'leads' | 'audit';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('zones');
@@ -79,6 +80,7 @@ export default function Admin() {
         onChange={setTab}
         options={[
           { value: 'settings', label: 'التشغيل' },
+          { value: 'coupons', label: 'العروض' },
           { value: 'zones', label: 'المناطق' },
           { value: 'stores', label: 'المحلات' },
           { value: 'users', label: 'الموظفين' },
@@ -90,6 +92,7 @@ export default function Admin() {
       {tab === 'stores' && <Stores />}
       {tab === 'users' && <UsersTab />}
       {tab === 'settings' && <SettingsTab />}
+      {tab === 'coupons' && <Coupons />}
       {tab === 'leads' && <Leads />}
       {tab === 'audit' && <Audit />}
     </div>
@@ -807,6 +810,9 @@ function Leads() {
 
 // ———— إعدادات التشغيل ————
 interface TenantSettings {
+  loyaltyEnabled: boolean;
+  loyaltyEarnPer: number;
+  loyaltyPointValue: number;
   autoDispatch: boolean;
   errandsEnabled: boolean;
   errandExtraFee: number;
@@ -839,6 +845,27 @@ function SettingsTab() {
     if (v) update.mutate({ errandExtraFee: toPiasters(v) });
   }
 
+  async function editLoyalty() {
+    const earn = await dialog.prompt({
+      title: 'العميل ياخد نقطة على كل كام جنيه؟',
+      label: 'بالجنيه',
+      defaultValue: String(s.loyaltyEarnPer / 100),
+      inputMode: 'decimal',
+      validate: (x) => (toPiasters(x) >= 100 ? null : 'جنيه واحد على الأقل'),
+    });
+    if (!earn) return;
+    const value = await dialog.prompt({
+      title: 'قيمة النقطة الواحدة لما العميل يصرفها',
+      label: 'بالجنيه',
+      defaultValue: String(s.loyaltyPointValue / 100),
+      inputMode: 'decimal',
+      validate: (x) =>
+        Number.isInteger(toPiasters(x)) && toPiasters(x) <= 1000 ? null : 'من ٠ لـ ١٠ جنيه',
+    });
+    if (value)
+      update.mutate({ loyaltyEarnPer: toPiasters(earn), loyaltyPointValue: toPiasters(value) });
+  }
+
   const rows = [
     {
       title: 'التوزيع التلقائي',
@@ -862,6 +889,23 @@ function SettingsTab() {
           onChange={(v) => update.mutate({ errandsEnabled: v })}
           label="المشاوير"
         />
+      ),
+    },
+    {
+      title: 'نقاط الولاء',
+      text: `نقطة على كل ${money(s.loyaltyEarnPer)} مشتريات، وقيمة النقطة ${money(s.loyaltyPointValue)} لما العميل يصرفها.`,
+      control: (
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" icon={Pencil} onClick={() => void editLoyalty()}>
+            تعديل
+          </Button>
+          <Switch
+            size="lg"
+            checked={s.loyaltyEnabled}
+            onChange={(v) => update.mutate({ loyaltyEnabled: v })}
+            label="نقاط الولاء"
+          />
+        </div>
       ),
     },
     {
@@ -889,5 +933,254 @@ function SettingsTab() {
         </div>
       ))}
     </TableCard>
+  );
+}
+
+// ———— الكوبونات والعروض ————
+interface AdminCoupon {
+  id: string;
+  code: string;
+  title: string;
+  kind: 'percent' | 'fixed' | 'free_delivery';
+  value: number;
+  maxDiscount: number | null;
+  minSubtotal: number;
+  maxUses: number | null;
+  perCustomerLimit: number;
+  firstOrderOnly: boolean;
+  isPublic: boolean;
+  isActive: boolean;
+  endsAt: string | null;
+  uses: number;
+  totalDiscount: number;
+}
+
+function couponSummary(
+  c: Pick<AdminCoupon, 'kind' | 'value' | 'maxDiscount' | 'minSubtotal'>,
+): string {
+  const main =
+    c.kind === 'percent'
+      ? `خصم ${num(c.value / 100)}٪${c.maxDiscount ? ` لحد ${money(c.maxDiscount)}` : ''}`
+      : c.kind === 'fixed'
+        ? `خصم ${money(c.value)}`
+        : 'توصيل مجاني';
+  return c.minSubtotal ? `${main} · للطلبات من ${money(c.minSubtotal)}` : main;
+}
+
+function Coupons() {
+  const coupons = useQuery({
+    queryKey: ['admin-coupons'],
+    queryFn: () => get<AdminCoupon[]>('/admin/coupons'),
+  });
+  const saver = useSaver('admin-coupons');
+  const [adding, setAdding] = useState(false);
+  const update = useMutation({
+    mutationFn: (v: { id: string; body: Partial<AdminCoupon> }) =>
+      patch(`/admin/coupons/${v.id}`, v.body),
+    ...saver,
+  });
+  if (coupons.isPending) return <SkeletonList count={3} className="h-20" />;
+  if (coupons.error) return <ErrorBox error={coupons.error} />;
+  return (
+    <>
+      <TableCard
+        title="الكوبونات والعروض"
+        icon={TicketPercent}
+        action={
+          <Button size="sm" icon={Plus} onClick={() => setAdding(true)}>
+            كوبون جديد
+          </Button>
+        }
+      >
+        {coupons.data.length === 0 && (
+          <p className="px-5 py-8 text-center text-sm text-ink-500">لسه مفيش عروض</p>
+        )}
+        {coupons.data.map((c) => (
+          <div
+            key={c.id}
+            className={cx(
+              'flex flex-wrap items-center gap-3 px-5 py-4',
+              !c.isActive && 'opacity-60',
+            )}
+          >
+            <span className="rounded-xl bg-sun-100 px-3 py-1.5 font-bold text-ink-900" dir="ltr">
+              {c.code}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">{c.title}</div>
+              <div className="text-sm text-ink-500">
+                {couponSummary(c)}
+                {c.firstOrderOnly ? ' · لأول طلب بس' : ''}
+              </div>
+              <div className="tabular text-xs text-ink-400">
+                اتستخدم {num(c.uses)}
+                {c.maxUses ? ` من ${num(c.maxUses)}` : ''} مرة · إجمالي الخصم{' '}
+                {money(c.totalDiscount)}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-ink-500">
+              في الإعلانات
+              <Switch
+                checked={c.isPublic}
+                onChange={(v) => update.mutate({ id: c.id, body: { isPublic: v } })}
+                label="يظهر في الإعلانات"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-ink-500">
+              شغال
+              <Switch
+                checked={c.isActive}
+                onChange={(v) => update.mutate({ id: c.id, body: { isActive: v } })}
+                label="الكوبون شغال"
+              />
+            </label>
+          </div>
+        ))}
+      </TableCard>
+      <NewCouponModal open={adding} onClose={() => setAdding(false)} />
+    </>
+  );
+}
+
+function NewCouponModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [form, setForm] = useState({
+    code: '',
+    title: '',
+    kind: 'percent' as AdminCoupon['kind'],
+    value: '10',
+    maxDiscount: '',
+    minSubtotal: '',
+    maxUses: '',
+    perCustomerLimit: '1',
+    firstOrderOnly: false,
+    endsAt: '',
+  });
+  const set = (k: keyof typeof form, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const create = useMutation({
+    mutationFn: () =>
+      post('/admin/coupons', {
+        code: form.code,
+        title: form.title,
+        kind: form.kind,
+        value:
+          form.kind === 'percent'
+            ? Math.round(Number(form.value) * 100)
+            : form.kind === 'fixed'
+              ? toPiasters(form.value)
+              : 0,
+        maxDiscount: form.maxDiscount ? toPiasters(form.maxDiscount) : null,
+        minSubtotal: form.minSubtotal ? toPiasters(form.minSubtotal) : 0,
+        maxUses: form.maxUses ? Number(form.maxUses) : null,
+        perCustomerLimit: Number(form.perCustomerLimit) || 1,
+        firstOrderOnly: form.firstOrderOnly,
+        endsAt: form.endsAt ? new Date(`${form.endsAt}T23:59:59+02:00`).toISOString() : null,
+      }),
+    onSuccess: () => {
+      toast('الكوبون اتعمل');
+      void queryClient.invalidateQueries({ queryKey: ['admin-coupons'] });
+      onClose();
+    },
+  });
+  return (
+    <Modal open={open} onClose={onClose} title="كوبون جديد" icon={TicketPercent} size="lg">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          create.mutate();
+        }}
+        className="grid gap-4 sm:grid-cols-2"
+      >
+        <Input
+          label="الكود"
+          hint="حروف إنجليزي وأرقام، زي RAMADAN25"
+          dir="ltr"
+          value={form.code}
+          onChange={(e) => set('code', e.target.value.toUpperCase())}
+          required
+        />
+        <Input
+          label="العنوان اللي بيظهر للعميل"
+          value={form.title}
+          onChange={(e) => set('title', e.target.value)}
+          required
+          minLength={3}
+        />
+        <Select label="نوع الخصم" value={form.kind} onChange={(e) => set('kind', e.target.value)}>
+          <option value="percent">نسبة من قيمة المنتجات</option>
+          <option value="fixed">مبلغ ثابت</option>
+          <option value="free_delivery">توصيل مجاني</option>
+        </Select>
+        {form.kind !== 'free_delivery' ? (
+          <Input
+            label={form.kind === 'percent' ? 'النسبة' : 'المبلغ'}
+            suffix={form.kind === 'percent' ? '٪' : 'ج.م'}
+            inputMode="decimal"
+            dir="ltr"
+            value={form.value}
+            onChange={(e) => set('value', e.target.value)}
+            required
+          />
+        ) : (
+          <div className="hidden sm:block" />
+        )}
+        {form.kind === 'percent' && (
+          <Input
+            label="أقصى خصم (اختياري)"
+            suffix="ج.م"
+            inputMode="decimal"
+            dir="ltr"
+            value={form.maxDiscount}
+            onChange={(e) => set('maxDiscount', e.target.value)}
+          />
+        )}
+        <Input
+          label="أقل قيمة للطلب (اختياري)"
+          suffix="ج.م"
+          inputMode="decimal"
+          dir="ltr"
+          value={form.minSubtotal}
+          onChange={(e) => set('minSubtotal', e.target.value)}
+        />
+        <Input
+          label="عدد مرات الاستخدام الكلي (اختياري)"
+          inputMode="numeric"
+          dir="ltr"
+          value={form.maxUses}
+          onChange={(e) => set('maxUses', e.target.value)}
+        />
+        <Input
+          label="مرات للعميل الواحد"
+          inputMode="numeric"
+          dir="ltr"
+          value={form.perCustomerLimit}
+          onChange={(e) => set('perCustomerLimit', e.target.value)}
+        />
+        <Input
+          label="آخر يوم (اختياري)"
+          type="date"
+          dir="ltr"
+          value={form.endsAt}
+          onChange={(e) => set('endsAt', e.target.value)}
+        />
+        <label className="flex items-center gap-3 self-end rounded-2xl p-3 ring-1 ring-ink-200">
+          <Switch
+            checked={form.firstOrderOnly}
+            onChange={(v) => set('firstOrderOnly', v)}
+            label="لأول طلب بس"
+          />
+          <span className="text-sm">لأول طلب بس</span>
+        </label>
+        {create.error && (
+          <div className="sm:col-span-2">
+            <ErrorBox error={create.error} />
+          </div>
+        )}
+        <Button type="submit" size="lg" loading={create.isPending} className="sm:col-span-2">
+          عمل الكوبون
+        </Button>
+      </form>
+    </Modal>
   );
 }

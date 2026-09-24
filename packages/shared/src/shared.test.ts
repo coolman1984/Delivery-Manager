@@ -122,3 +122,43 @@ describe('الخرايط', () => {
     expect(detectZone(zones, { lat: 29.5, lng: 31.1 })).toBeNull();
   });
 });
+
+import { calcCouponDiscount, maxRedeemablePoints, pointsEarned } from './marketing';
+
+describe('الكوبونات والنقاط', () => {
+  it('نسبة خصم بحد أقصى', () => {
+    const rule = { kind: 'percent' as const, value: 2000, maxDiscount: 3000, minSubtotal: 0 };
+    expect(calcCouponDiscount(rule, 10_000, 1500)).toBe(2000);
+    expect(calcCouponDiscount(rule, 50_000, 1500)).toBe(3000);
+  });
+  it('مبلغ ثابت وحد أدنى للطلب', () => {
+    const rule = { kind: 'fixed' as const, value: 2500, maxDiscount: null, minSubtotal: 10_000 };
+    expect(calcCouponDiscount(rule, 9_999, 1500)).toBe(0);
+    expect(calcCouponDiscount(rule, 10_000, 1500)).toBe(2500);
+  });
+  it('توصيل مجاني', () => {
+    expect(
+      calcCouponDiscount(
+        { kind: 'free_delivery', value: 0, maxDiscount: null, minSubtotal: 0 },
+        5000,
+        1500,
+      ),
+    ).toBe(1500);
+  });
+  it('الخصم عمره ما يزيد عن قيمة الطلب', () => {
+    expect(
+      calcCouponDiscount(
+        { kind: 'fixed', value: 99_999, maxDiscount: null, minSubtotal: 0 },
+        1000,
+        500,
+      ),
+    ).toBe(1500);
+  });
+  it('النقاط: نقطة لكل ١٠ جنيه، وماينفعش تصرف أكتر من اللي معاك أو من الإجمالي', () => {
+    const rule = { earnPer: 1000, pointValue: 10 };
+    expect(pointsEarned(rule, 12_345)).toBe(12);
+    expect(maxRedeemablePoints(rule, 500, 3000)).toBe(300);
+    expect(maxRedeemablePoints(rule, 50, 3000)).toBe(50);
+    expect(maxRedeemablePoints(rule, 0, 3000)).toBe(0);
+  });
+});

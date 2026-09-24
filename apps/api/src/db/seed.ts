@@ -5,7 +5,17 @@ import { Pool } from 'pg';
 import { loadDotenv } from '../config/load-dotenv';
 import { ARGON2_OPTIONS } from '../modules/auth/auth.service';
 import * as schema from './schema';
-import { addresses, driverProfiles, products, stores, tenants, users, zones } from './schema';
+import { seedHistory } from './seed-history';
+import {
+  addresses,
+  coupons,
+  driverProfiles,
+  products,
+  stores,
+  tenants,
+  users,
+  zones,
+} from './schema';
 
 /**
  * بيانات تجريبية: شركتين منفصلتين (بني سويف والفيوم) عشان تجرب النظام وتشوف العزل بعينك.
@@ -194,7 +204,12 @@ const TENANTS: TenantSeed[] = [
 
 type Db = NodePgDatabase<typeof schema>;
 
-async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<void> {
+async function seedTenant(
+  db: Db,
+  t: TenantSeed,
+  passwordHash: string,
+  history: boolean,
+): Promise<void> {
   const existing = await db
     .select({ id: tenants.id })
     .from(tenants)
@@ -226,6 +241,28 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
         })),
       )
       .returning();
+
+    // عروض تجريبية
+    await tx.insert(coupons).values([
+      {
+        tenantId,
+        code: 'WELCOME',
+        title: 'خصم ٢٠٪ على أول طلب',
+        kind: 'percent',
+        value: 2000,
+        maxDiscount: 3000,
+        firstOrderOnly: true,
+      },
+      {
+        tenantId,
+        code: 'FREEDEL',
+        title: 'توصيل مجاني للطلبات من ١٠٠ جنيه',
+        kind: 'free_delivery',
+        value: 0,
+        minSubtotal: 10000,
+        perCustomerLimit: 5,
+      },
+    ]);
 
     await tx.insert(users).values([
       {
@@ -329,17 +366,27 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
       });
     }
   });
+  if (history) {
+    const n = await db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
+      return seedHistory(tx, tenantId);
+    });
+    console.log(`📦 ${t.name}: ${n} طلب قديم للتجربة`);
+  }
   console.log(
     `✅ ${t.name}: ${t.zones.length} مناطق، ${t.stores.length} محلات، ${t.drivers.length} طيارين`,
   );
 }
 
-export async function seed(connectionString: string): Promise<void> {
+export async function seed(
+  connectionString: string,
+  opts: { history?: boolean } = {},
+): Promise<void> {
   const pool = new Pool({ connectionString });
   const db = drizzle(pool, { schema });
   try {
     const passwordHash = await argon2.hash(DEMO_PASSWORD, ARGON2_OPTIONS);
-    for (const t of TENANTS) await seedTenant(db, t, passwordHash);
+    for (const t of TENANTS) await seedTenant(db, t, passwordHash, opts.history ?? false);
   } finally {
     await pool.end();
   }
@@ -356,7 +403,7 @@ if (require.main === module) {
     console.error('محتاج MIGRATION_DATABASE_URL في ملف .env');
     process.exit(1);
   }
-  seed(url)
+  seed(url, { history: !process.argv.includes('--no-history') })
     .then(() => {
       console.log(`\n🔑 كلمة السر لكل الحسابات التجريبية: ${DEMO_PASSWORD}`);
       console.log('📖 أرقام الحسابات موجودة في ملف README.md');

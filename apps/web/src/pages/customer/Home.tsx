@@ -19,6 +19,7 @@ import { Art, StoreCover, StoreLogo } from '../../components/visual';
 import { cx, EmptyState, ErrorBox, Skeleton } from '../../components/ui';
 import { get } from '../../lib/api';
 import { useSelectedAddress, useZones } from '../../lib/address';
+import { useToast } from '../../components/toast';
 import { useAuth } from '../../lib/auth';
 import { money, num, orderNo } from '../../lib/format';
 import type { Order, StoreSummary } from '../../lib/types';
@@ -39,6 +40,10 @@ export default function Home() {
   const stores = useQuery({
     queryKey: ['catalog', 'stores'],
     queryFn: () => get<StoreSummary[]>('/catalog/stores'),
+  });
+  const offers = useQuery({
+    queryKey: ['catalog', 'offers'],
+    queryFn: () => get<Offer[]>('/catalog/offers'),
   });
 
   const minFee = zones.data?.length ? Math.min(...zones.data.map((z) => z.deliveryFee)) : null;
@@ -172,6 +177,9 @@ export default function Home() {
         {/* ———— الإعلانات ———— */}
         {!search && (
           <section className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-3 md:px-0">
+            {offers.data?.map((o, i) => (
+              <OfferBanner key={o.code} offer={o} index={i} />
+            ))}
             <Banner
               tone="bg-sun-400 text-ink-900"
               title="الدفع كاش عند الباب"
@@ -490,5 +498,60 @@ function ActiveOrderBanner() {
         تابع <ChevronLeft className="size-4" />
       </span>
     </Link>
+  );
+}
+
+interface Offer {
+  code: string;
+  title: string;
+  kind: 'percent' | 'fixed' | 'free_delivery';
+  value: number;
+  minSubtotal: number;
+  firstOrderOnly: boolean;
+}
+
+const OFFER_STYLES = [
+  'bg-brand-700 text-white',
+  'bg-rose-500 text-white',
+  'bg-violet-600 text-white',
+];
+const OFFER_ART: Record<Offer['kind'], string> = {
+  percent: 'party',
+  fixed: 'gift',
+  free_delivery: 'scooter',
+};
+
+function OfferBanner({ offer, index }: { offer: Offer; index: number }) {
+  const toast = useToast();
+  const headline =
+    offer.kind === 'percent'
+      ? `خصم ${num(offer.value / 100)}٪`
+      : offer.kind === 'fixed'
+        ? `خصم ${money(offer.value)}`
+        : 'توصيل مجاني';
+  return (
+    <button
+      onClick={() => {
+        void navigator.clipboard?.writeText(offer.code).catch(() => undefined);
+        toast(`اتنسخ الكود ${offer.code}، استخدمه في السلة`);
+      }}
+      className={cx(
+        'relative flex h-40 w-[86%] shrink-0 snap-center cursor-pointer flex-col items-start justify-center overflow-hidden rounded-3xl p-5 text-start shadow-card md:w-auto',
+        OFFER_STYLES[index % OFFER_STYLES.length],
+      )}
+    >
+      <div className="absolute -bottom-10 -left-10 size-44 rounded-full bg-white/15" />
+      <Art name={OFFER_ART[offer.kind]} className="absolute bottom-3 left-3 size-24 -rotate-6" />
+      <div className="relative max-w-[60%]">
+        <div className="text-2xl leading-tight font-extrabold">{headline}</div>
+        <div className="mt-1 text-sm opacity-90">{offer.title}</div>
+        <span
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sun-400 px-3 py-1 text-xs font-bold text-ink-900"
+          dir="ltr"
+        >
+          {offer.code}
+        </span>
+      </div>
+    </button>
   );
 }

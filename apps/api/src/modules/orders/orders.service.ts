@@ -38,6 +38,7 @@ import {
 import { LedgerService } from '../finance/ledger.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SettingsService } from '../settings/settings.service';
+import { MarketingService } from '../marketing/marketing.service';
 import { PushService } from '../push/push.service';
 import { DispatchService } from './dispatch.service';
 
@@ -65,6 +66,7 @@ export class OrdersService {
     private readonly settings: SettingsService,
     private readonly dispatch: DispatchService,
     private readonly push: PushService,
+    private readonly marketing: MarketingService,
   ) {}
 
   // ———— العميل يطلب ————
@@ -152,6 +154,35 @@ export class OrdersService {
         .where(eq(users.id, actor.userId))
         .limit(1);
 
+      // ———— الخصومات: كوبون ثم نقاط ————
+      const settings = await this.settings.get(tx);
+      let couponId: string | null = null;
+      let couponDiscount = 0;
+      if (input.couponCode) {
+        const resolved = await this.marketing.resolveCoupon(tx, input.couponCode, {
+          subtotal: totals.subtotal,
+          deliveryFee: totals.deliveryFee,
+          storeId: store.id,
+          customerId: actor.userId,
+        });
+        couponId = resolved.coupon.id;
+        couponDiscount = resolved.discount;
+      }
+      let pointsUsed = 0;
+      let pointsDiscount = 0;
+      if (input.usePoints) {
+        // قفل على رصيد العميل عشان طلبين في نفس اللحظة مايصرفوش نفس النقاط
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${actor.userId}))`);
+        const balance = await this.marketing.balance(tx, actor.userId);
+        const payable = totals.subtotal + totals.deliveryFee - couponDiscount;
+        ({ points: pointsUsed, discount: pointsDiscount } = this.marketing.pointsDiscount(
+          settings,
+          balance,
+          payable,
+        ));
+      }
+      const discount = couponDiscount + pointsDiscount;
+
       const number = await this.nextNumber(tx, actor.tenantId, 'order');
       const [row] = await tx
         .insert(orders)
@@ -169,13 +200,18 @@ export class OrdersService {
           customerPhone: customer!.phone,
           subtotal: totals.subtotal,
           deliveryFee: totals.deliveryFee,
-          discount: totals.discount,
-          total: totals.total,
+          discount,
+          total: totals.subtotal + totals.deliveryFee - discount,
+          couponId,
+          couponDiscount,
+          pointsUsed,
+          pointsDiscount,
           commissionBps: store.commissionBps,
           commissionAmount: totals.commission,
           note: input.note ?? null,
         })
         .returning();
+      await this.marketing.redeem(tx, row!);
       await tx.insert(orderItems).values(
         lines.map((l) => ({
           tenantId: actor.tenantId,
@@ -454,6 +490,7 @@ export class OrdersService {
         entityId: order.id,
         meta: reason ? { reason } : undefined,
       });
+      if (to === 'rejected' || to === 'cancelled') await this.marketing.release(tx, updated!);
       if ((to === 'rejected' || to === 'cancelled') && order.driverId) {
         await this.refreshDriverStatus(tx, order.driverId);
       }
@@ -496,6 +533,7 @@ export class OrdersService {
         .returning();
 
       await this.postDelivery(tx, updated!, actor.userId);
+      await this.marketing.earn(tx, updated!, await this.settings.get(tx));
       await this.event(
         tx,
         updated!,
@@ -886,6 +924,9 @@ export class OrdersService {
       subtotal: o.subtotal,
       deliveryFee: o.deliveryFee,
       discount: o.discount,
+      couponDiscount: o.couponDiscount,
+      pointsUsed: o.pointsUsed,
+      pointsDiscount: o.pointsDiscount,
       total: o.total,
       commissionAmount: internal ? o.commissionAmount : null,
       cashCollected: o.cashCollected,

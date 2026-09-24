@@ -10,7 +10,14 @@ import { loadDotenv } from '../config/load-dotenv';
  * - مايقدرش يعدّل أو يمسح دفتر الحسابات ولا سجل العمليات
  * - مايقدرش يغيّر شكل الجداول
  */
-const IMMUTABLE_TABLES = ['journals', 'ledger_lines', 'settlements', 'audit_logs', 'order_events'];
+const IMMUTABLE_TABLES = [
+  'journals',
+  'ledger_lines',
+  'settlements',
+  'audit_logs',
+  'order_events',
+  'loyalty_points',
+];
 
 export async function runMigrations(ownerUrl: string, appUrl: string): Promise<void> {
   const app = new URL(appUrl);

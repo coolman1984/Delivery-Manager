@@ -264,6 +264,22 @@ export default function OrderPage() {
               <Money value={o.deliveryFee} />
             </dd>
           </div>
+          {o.couponDiscount > 0 && (
+            <div className="flex justify-between text-brand-700">
+              <dt>خصم الكوبون</dt>
+              <dd>
+                − <Money value={o.couponDiscount} />
+              </dd>
+            </div>
+          )}
+          {o.pointsDiscount > 0 && (
+            <div className="flex justify-between text-brand-700">
+              <dt>خصم النقاط ({num(o.pointsUsed)} نقطة)</dt>
+              <dd>
+                − <Money value={o.pointsDiscount} />
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between pt-1 text-base font-bold">
             <dt>الإجمالي (كاش)</dt>
             <dd>

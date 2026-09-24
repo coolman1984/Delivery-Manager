@@ -6,6 +6,7 @@ import {
   MapPin,
   Package,
   Phone,
+  Star,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -18,7 +19,10 @@ import { PushButton } from '../../components/PushButton';
 import { Avatar } from '../../components/ui';
 import { useSelectedAddress } from '../../lib/address';
 import { useAuth } from '../../lib/auth';
-import { num } from '../../lib/format';
+import { dateTime, money, num, orderNo } from '../../lib/format';
+import { get } from '../../lib/api';
+import { Modal } from '../../components/dialog';
+import { useQuery } from '@tanstack/react-query';
 
 interface Row {
   icon: LucideIcon;
@@ -80,6 +84,8 @@ export default function Account() {
         </div>
       </div>
 
+      <PointsCard />
+
       <PushButton className="w-full py-3" />
 
       <div className="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-ink-200/60">
@@ -109,5 +115,74 @@ export default function Account() {
       <AddressSheet open={addressesOpen} onClose={() => setAddressesOpen(false)} />
       <JoinModal type={join} onClose={() => setJoin(null)} />
     </div>
+  );
+}
+
+function PointsCard() {
+  const points = useQuery({
+    queryKey: ['points'],
+    queryFn: () =>
+      get<{
+        enabled: boolean;
+        balance: number;
+        pointValue: number;
+        earnPer: number;
+        history: Array<{
+          points: number;
+          reason: string;
+          createdAt: string;
+          orderNumber: number | null;
+        }>;
+      }>('/me/points'),
+  });
+  const [open, setOpen] = useState(false);
+  const p = points.data;
+  if (!p?.enabled) return null;
+  const REASONS: Record<string, string> = {
+    earn: 'كسبت من طلب',
+    redeem: 'استخدمتها في طلب',
+    refund: 'رجعت من طلب ملغي',
+  };
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex w-full cursor-pointer items-center gap-4 rounded-3xl bg-sun-400 p-5 text-start text-ink-900 shadow-card"
+      >
+        <Art name="star" className="size-14" />
+        <div className="flex-1">
+          <div className="text-sm">نقاطك</div>
+          <div className="tabular text-2xl font-extrabold">{num(p.balance)} نقطة</div>
+          <div className="text-sm">
+            تساوي {money(p.balance * p.pointValue)} · نقطة على كل {money(p.earnPer)}
+          </div>
+        </div>
+        <ChevronLeft className="size-5" />
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="حركة النقاط" icon={Star}>
+        {p.history.length === 0 && (
+          <p className="text-sm text-ink-500">لسه مفيش حركة. اطلب وهتبدأ تجمع نقاط.</p>
+        )}
+        <div className="divide-y divide-ink-100">
+          {p.history.map((h, i) => (
+            <div key={i} className="flex items-center justify-between py-3 text-sm">
+              <div>
+                <div className="font-medium">{REASONS[h.reason] ?? h.reason}</div>
+                <div className="text-xs text-ink-500">
+                  {h.orderNumber ? `${orderNo(h.orderNumber)} · ` : ''}
+                  {dateTime(h.createdAt)}
+                </div>
+              </div>
+              <span
+                className={`tabular font-bold ${h.points > 0 ? 'text-brand-700' : 'text-rose-600'}`}
+              >
+                {h.points > 0 ? '+' : ''}
+                {num(h.points)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Modal>
+    </>
   );
 }

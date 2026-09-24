@@ -54,7 +54,8 @@ export async function resetData(): Promise<void> {
   await ownerQuery(`
     TRUNCATE tenants, tenant_counters, zones, stores, users, refresh_tokens, addresses, driver_profiles,
       products, orders, order_items, order_events, ratings, ledger_accounts, journals, ledger_lines,
-      settlements, audit_logs CASCADE`);
+      settlements, audit_logs, leads, tenant_settings, push_subscriptions, coupons, coupon_redemptions,
+      loyalty_points CASCADE`);
   const redis = new Redis(process.env.REDIS_URL!);
   await redis.flushdb();
   await redis.quit();

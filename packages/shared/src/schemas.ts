@@ -118,6 +118,8 @@ export const createOrderSchema = z.strictObject({
     .min(1, 'السلة فاضية')
     .max(50),
   note: shortText.optional(),
+  couponCode: z.string().trim().max(30).optional(),
+  usePoints: z.boolean().optional(),
 });
 
 export const reasonSchema = z.strictObject({
@@ -242,6 +244,9 @@ export const pointQuerySchema = z.strictObject({
 });
 
 export const tenantSettingsSchema = z.strictObject({
+  loyaltyEnabled: z.boolean().optional(),
+  loyaltyEarnPer: z.number().int().min(100).max(100_000).optional(),
+  loyaltyPointValue: z.number().int().min(0).max(1000).optional(),
   autoDispatch: z.boolean().optional(),
   errandsEnabled: z.boolean().optional(),
   errandExtraFee: piasters.optional(),
@@ -256,3 +261,54 @@ export const pushSubscribeSchema = z.strictObject({
   }),
 });
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
+
+// ———— الكوبونات ————
+export const couponCodeSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(z.string().regex(/^[A-Z0-9_-]{3,30}$/, 'الكود حروف إنجليزي وأرقام من ٣ لـ ٣٠'));
+
+export const couponCreateSchema = z
+  .strictObject({
+    code: couponCodeSchema,
+    title: z.string().trim().min(3).max(80),
+    kind: z.enum(['percent', 'fixed', 'free_delivery']),
+    value: z.number().int().min(0).max(MAX_AMOUNT_PIASTERS).default(0),
+    maxDiscount: piasters.min(1).nullable().optional(),
+    minSubtotal: piasters.default(0),
+    storeId: id.nullable().optional(),
+    startsAt: z.iso.datetime().nullable().optional(),
+    endsAt: z.iso.datetime().nullable().optional(),
+    maxUses: z.number().int().min(1).max(1_000_000).nullable().optional(),
+    perCustomerLimit: z.number().int().min(1).max(100).default(1),
+    firstOrderOnly: z.boolean().default(false),
+    isPublic: z.boolean().default(true),
+  })
+  .refine((c) => c.kind !== 'percent' || (c.value >= 1 && c.value <= 10_000), {
+    message: 'النسبة من ١ لـ ١٠٠٪',
+    path: ['value'],
+  })
+  .refine((c) => c.kind !== 'fixed' || c.value >= 1, {
+    message: 'اكتب قيمة الخصم',
+    path: ['value'],
+  });
+export type CouponCreateInput = z.infer<typeof couponCreateSchema>;
+
+export const couponUpdateSchema = z.strictObject({
+  isActive: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  endsAt: z.iso.datetime().nullable().optional(),
+});
+
+export const couponCheckSchema = z.strictObject({
+  code: couponCodeSchema,
+  storeId: id,
+  subtotal: piasters,
+  deliveryFee: piasters,
+});
+
+export const reportQuerySchema = z.strictObject({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});

@@ -1,48 +1,43 @@
 import type { TenantSettingsInput } from '@dm/shared/schemas';
 import { Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
 import type { Tx } from '../../common/db.service';
 import { tenantSettings } from '../../db/schema';
 
-export type TenantSettings = Pick<
-  typeof tenantSettings.$inferSelect,
-  'autoDispatch' | 'errandsEnabled' | 'errandExtraFee'
->;
+type Row = typeof tenantSettings.$inferSelect;
+export type TenantSettings = Omit<Row, 'tenantId' | 'updatedAt'>;
 
-const DEFAULTS: TenantSettings = { autoDispatch: false, errandsEnabled: true, errandExtraFee: 0 };
+const DEFAULTS: TenantSettings = {
+  autoDispatch: false,
+  errandsEnabled: true,
+  errandExtraFee: 0,
+  loyaltyEnabled: true,
+  loyaltyEarnPer: 1000,
+  loyaltyPointValue: 10,
+};
 
-/** إعدادات تشغيل كل شركة (التوزيع التلقائي، المشاوير...) */
+function pick(row: Row): TenantSettings {
+  const { tenantId: _t, updatedAt: _u, ...rest } = row;
+  return rest;
+}
+
+/** إعدادات تشغيل كل شركة (التوزيع التلقائي، المشاوير، نقاط الولاء...) */
 @Injectable()
 export class SettingsService {
   async get(tx: Tx): Promise<TenantSettings> {
     const [row] = await tx.select().from(tenantSettings).limit(1);
-    return row
-      ? {
-          autoDispatch: row.autoDispatch,
-          errandsEnabled: row.errandsEnabled,
-          errandExtraFee: row.errandExtraFee,
-        }
-      : DEFAULTS;
+    return row ? pick(row) : DEFAULTS;
   }
 
   async update(tx: Tx, tenantId: string, input: TenantSettingsInput): Promise<TenantSettings> {
-    const current = await this.get(tx);
-    const next = { ...current, ...input };
-    await tx
+    const next = { ...(await this.get(tx)), ...input };
+    const [row] = await tx
       .insert(tenantSettings)
       .values({ tenantId, ...next })
       .onConflictDoUpdate({
         target: tenantSettings.tenantId,
         set: { ...next, updatedAt: new Date() },
-      });
-    const [row] = await tx
-      .select()
-      .from(tenantSettings)
-      .where(eq(tenantSettings.tenantId, tenantId));
-    return {
-      autoDispatch: row!.autoDispatch,
-      errandsEnabled: row!.errandsEnabled,
-      errandExtraFee: row!.errandExtraFee,
-    };
+      })
+      .returning();
+    return pick(row!);
   }
 }

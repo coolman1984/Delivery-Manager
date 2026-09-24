@@ -85,6 +85,9 @@ export interface Order {
   subtotal: number;
   deliveryFee: number;
   discount: number;
+  couponDiscount: number;
+  pointsUsed: number;
+  pointsDiscount: number;
   total: number;
   commissionAmount: number | null;
   cashCollected: number | null;

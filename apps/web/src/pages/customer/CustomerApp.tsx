@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { useCart } from '../../lib/cart';
 import Account from './Account';
 import Checkout from './Checkout';
+import Errand from './Errand';
 import Home from './Home';
 import OrderPage from './OrderPage';
 import Orders from './Orders';
@@ -34,6 +35,14 @@ export default function CustomerApp() {
       <Routes>
         <Route index element={<Home />} />
         <Route path="stores/:id" element={<StorePage />} />
+        <Route
+          path="errand"
+          element={
+            <RequireLogin>
+              <Errand />
+            </RequireLogin>
+          }
+        />
         <Route
           path="cart"
           element={

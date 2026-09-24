@@ -44,6 +44,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:?اكتب CORS_ORIGINS في .env}
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
       OTP_ENABLED: ${OTP_ENABLED:-false}
+      MEDIA_DIR: /app/media
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
       TRUST_PROXY: '1'
     depends_on:
       postgres: { condition: service_healthy }
@@ -63,6 +67,8 @@ services:
     networks: [backend, frontend]
     read_only: true
     tmpfs: [/tmp]
+    # صور المحلات والمنتجات المرفوعة
+    volumes: [media:/app/media]
     security_opt: ['no-new-privileges:true']
 
   web:
@@ -86,7 +92,7 @@ services:
       PGDATABASE: delivery
       BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?اكتب BACKUP_PASSPHRASE في .env}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
-    volumes: ['./scripts:/scripts:ro', './backups:/backups']
+    volumes: ['./scripts:/scripts:ro', './backups:/backups', 'media:/media:ro']
     depends_on:
       postgres: { condition: service_healthy }
     networks: [backend]
@@ -96,6 +102,7 @@ networks:
   frontend: {}
 
 volumes:
+  media:
   pgdata:
   redisdata:
   caddydata:

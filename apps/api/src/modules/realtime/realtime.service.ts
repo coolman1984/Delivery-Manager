@@ -7,7 +7,7 @@ export interface OrderNotice {
   number: number;
   status: string;
   customerId: string;
-  storeId: string;
+  storeId: string | null;
   driverId: string | null;
   previousDriverId?: string | null;
 }
@@ -20,11 +20,8 @@ export class RealtimeService {
   orderChanged(o: OrderNotice): void {
     const server = this.gateway.server;
     if (!server) return;
-    const targets = [
-      rooms.user(o.tenantId, o.customerId),
-      rooms.store(o.tenantId, o.storeId),
-      rooms.ops(o.tenantId),
-    ];
+    const targets = [rooms.user(o.tenantId, o.customerId), rooms.ops(o.tenantId)];
+    if (o.storeId) targets.push(rooms.store(o.tenantId, o.storeId));
     if (o.driverId) targets.push(rooms.user(o.tenantId, o.driverId));
     if (o.previousDriverId && o.previousDriverId !== o.driverId) {
       targets.push(rooms.user(o.tenantId, o.previousDriverId));

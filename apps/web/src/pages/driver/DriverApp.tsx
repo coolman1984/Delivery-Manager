@@ -180,7 +180,10 @@ function DriverOrderCard({ order }: { order: Order }) {
   });
 
   const pickedUp = order.status === 'picked_up';
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.addressText)}`;
+  const mapUrl =
+    order.dropoffLat != null
+      ? `https://www.google.com/maps/dir/?api=1&destination=${order.dropoffLat},${order.dropoffLng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.addressText)}`;
 
   return (
     <Card padded={false} className="overflow-hidden">
@@ -195,9 +198,28 @@ function DriverOrderCard({ order }: { order: Order }) {
           <Stop
             done={pickedUp}
             icon={Store}
-            title="استلام من"
-            name={order.storeName ?? ''}
-            phone={detail.data?.storePhone}
+            title={order.type === 'errand' ? 'مشوار — استلام من' : 'استلام من'}
+            name={order.type === 'errand' ? (order.pickupText ?? '') : (order.storeName ?? '')}
+            phone={order.type === 'errand' ? null : detail.data?.storePhone}
+            extra={
+              order.type === 'errand' ? (
+                <div className="mt-1.5 space-y-2">
+                  <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900">
+                    المطلوب: {order.errandDetails}
+                  </p>
+                  {order.pickupLat != null && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${order.pickupLat},${order.pickupLng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700"
+                    >
+                      <Navigation className="size-4" /> الطريق لمكان الاستلام
+                    </a>
+                  )}
+                </div>
+              ) : undefined
+            }
           />
           <Stop
             done={false}

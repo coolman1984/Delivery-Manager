@@ -102,3 +102,23 @@ describe('فحص المدخلات', () => {
     expect(userCreateSchema.safeParse({ ...base, role: 'customer' }).success).toBe(false);
   });
 });
+
+import { detectZone, distanceKm } from './geo';
+
+describe('الخرايط', () => {
+  it('بتحسب المسافة صح (القاهرة ↔ بني سويف تقريباً ١١٠ كم)', () => {
+    const d = distanceKm({ lat: 30.0444, lng: 31.2357 }, { lat: 29.0661, lng: 31.0994 });
+    expect(d).toBeGreaterThan(105);
+    expect(d).toBeLessThan(115);
+  });
+
+  it('بتعرف المنطقة من المكان، والأقرب لو في تداخل', () => {
+    const zones = [
+      { id: 'a', lat: 29.07, lng: 31.1, radiusKm: 2 },
+      { id: 'b', lat: 29.08, lng: 31.1, radiusKm: 2 },
+    ];
+    expect(detectZone(zones, { lat: 29.071, lng: 31.1 })?.id).toBe('a');
+    expect(detectZone(zones, { lat: 29.079, lng: 31.1 })?.id).toBe('b');
+    expect(detectZone(zones, { lat: 29.5, lng: 31.1 })).toBeNull();
+  });
+});

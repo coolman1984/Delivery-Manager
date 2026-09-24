@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, MapPin, MapPinned, Plus } from 'lucide-react';
+import { Check, Crosshair, MapPin, MapPinned, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { get, post } from '../lib/api';
 import { useSelectedAddress } from '../lib/address';
 import { money } from '../lib/format';
 import type { Zone } from '../lib/types';
 import { Modal } from './dialog';
+import { LazyMap } from './LazyMap';
+import { useToast } from './toast';
 import { Button, cx, ErrorBox, Input, Select, Textarea } from './ui';
 
 /** اختيار عنوان التوصيل من أعلى الصفحة الرئيسية (زي التطبيقات الكبيرة) */
@@ -78,14 +80,51 @@ export function AddAddressModal({
   const [zoneId, setZoneId] = useState('');
   const [label, setLabel] = useState('البيت');
   const [details, setDetails] = useState('');
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const toast = useToast();
   const queryClient = useQueryClient();
+
+  async function applyPoint(p: { lat: number; lng: number }) {
+    setPoint(p);
+    try {
+      const res = await get<{ zone: { id: string; name: string } | null }>(
+        `/catalog/zones/detect?lat=${p.lat}&lng=${p.lng}`,
+      );
+      if (res.zone) {
+        setZoneId(res.zone.id);
+        toast(`مكانك في منطقة ${res.zone.name}`);
+      } else {
+        toast('المكان ده بره مناطق التوصيل، اختار المنطقة الأقرب', 'error');
+      }
+    } catch {
+      // مش مشكلة، يختار المنطقة بإيده
+    }
+  }
+
+  function locate() {
+    if (!('geolocation' in navigator)) return toast('الموبايل مش بيدعم تحديد المكان', 'error');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        void applyPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        setLocating(false);
+        toast('مقدرناش نحدد مكانك، اسمح للتطبيق يعرف المكان أو دوس على الخريطة', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
   const zones = useQuery({
     queryKey: ['catalog', 'zones'],
     queryFn: () => get<Zone[]>('/catalog/zones'),
     enabled: open,
   });
   const add = useMutation({
-    mutationFn: () => post<{ id: string }>('/me/addresses', { label, zoneId, details }),
+    mutationFn: () =>
+      post<{ id: string }>('/me/addresses', { label, zoneId, details, ...(point ?? {}) }),
     onSuccess: async (res) => {
       await queryClient.invalidateQueries({ queryKey: ['addresses'] });
       onAdded(res.id);
@@ -106,6 +145,37 @@ export function AddAddressModal({
       icon={MapPinned}
     >
       <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Button
+            type="button"
+            variant="soft"
+            icon={Crosshair}
+            block
+            loading={locating}
+            onClick={locate}
+          >
+            حدد مكاني على الخريطة
+          </Button>
+          {(point || zones.data?.some((z) => z.centerLat)) && (
+            <LazyMap
+              className="h-48"
+              fit={false}
+              zoom={15}
+              center={
+                point ??
+                (() => {
+                  const z = zones.data?.find((x) => x.centerLat);
+                  return z ? { lat: z.centerLat!, lng: z.centerLng! } : undefined;
+                })()
+              }
+              markers={point ? [{ id: 'me', ...point, kind: 'home' }] : []}
+              onPick={(p) => void applyPoint(p)}
+            />
+          )}
+          <p className="text-xs text-ink-500">
+            دوس على مكان بيتك بالظبط على الخريطة عشان الطيار يوصلك أسرع
+          </p>
+        </div>
         <Select label="المنطقة" value={zoneId} onChange={(e) => setZoneId(e.target.value)} required>
           <option value="">اختار المنطقة</option>
           {zones.data?.map((z) => (

@@ -10,6 +10,7 @@ import {
   PackageCheck,
   Phone,
   Search,
+  Sparkles,
   ShoppingBag,
   TrendingUp,
   TriangleAlert,
@@ -219,6 +220,14 @@ function OpsOrderCard({ order, drivers }: { order: Order; drivers: DriverOvervie
     },
     onError: (e) => toast(e.message, 'error'),
   });
+  const autoAssign = useMutation({
+    mutationFn: () => post(`/orders/${order.id}/auto-assign`),
+    onSuccess: () => {
+      toast('اتسند لأنسب طيار');
+      refresh();
+    },
+    onError: (e) => toast(e.message, 'error'),
+  });
   const cancel = useMutation({
     mutationFn: (reason: string) => post(`/orders/${order.id}/cancel-by-ops`, { reason }),
     onSuccess: () => {
@@ -275,6 +284,11 @@ function OpsOrderCard({ order, drivers }: { order: Order; drivers: DriverOvervie
             </a>
           )}
         </div>
+        {order.type === 'errand' && (
+          <div className="rounded-xl bg-violet-50 px-2.5 py-1.5 text-violet-800">
+            مشوار من: {order.pickupText} · {order.errandDetails}
+          </div>
+        )}
         <div className="flex items-start gap-1.5">
           <MapPin className="mt-0.5 size-3.5 shrink-0" />
           <span className="line-clamp-2">{order.addressText}</span>
@@ -309,6 +323,15 @@ function OpsOrderCard({ order, drivers }: { order: Order; drivers: DriverOvervie
               </option>
             ))}
           </select>
+          <button
+            onClick={() => autoAssign.mutate()}
+            disabled={autoAssign.isPending}
+            className="cursor-pointer rounded-xl p-2 text-brand-600 hover:bg-brand-50"
+            aria-label="اختار أنسب طيار"
+            title="اختار أنسب طيار تلقائي"
+          >
+            <Sparkles className="size-5" />
+          </button>
           {active && (
             <button
               onClick={() => void askCancel()}

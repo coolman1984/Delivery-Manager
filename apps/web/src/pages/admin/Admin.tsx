@@ -8,6 +8,7 @@ import {
   Percent,
   Plus,
   ScrollText,
+  Settings2,
   Store,
   UserPlus,
   Users,
@@ -35,6 +36,7 @@ import { dateTime, num, toPiasters } from '../../lib/format';
 import type { Zone } from '../../lib/types';
 import { ImagePicker } from '../../components/ImagePicker';
 import { StoreLogo } from '../../components/visual';
+import { LazyMap, type MapMarker } from '../../components/LazyMap';
 
 interface AdminStore {
   id: string;
@@ -61,7 +63,7 @@ interface AuditRow {
   createdAt: string;
 }
 
-type Tab = 'zones' | 'stores' | 'users' | 'leads' | 'audit';
+type Tab = 'settings' | 'zones' | 'stores' | 'users' | 'leads' | 'audit';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('zones');
@@ -76,6 +78,7 @@ export default function Admin() {
         value={tab}
         onChange={setTab}
         options={[
+          { value: 'settings', label: 'التشغيل' },
           { value: 'zones', label: 'المناطق' },
           { value: 'stores', label: 'المحلات' },
           { value: 'users', label: 'الموظفين' },
@@ -86,6 +89,7 @@ export default function Admin() {
       {tab === 'zones' && <Zones />}
       {tab === 'stores' && <Stores />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'settings' && <SettingsTab />}
       {tab === 'leads' && <Leads />}
       {tab === 'audit' && <Audit />}
     </div>
@@ -131,6 +135,7 @@ function TableCard({
 // ———— المناطق ————
 function Zones() {
   const zones = useQuery({ queryKey: ['admin-zones'], queryFn: () => get<Zone[]>('/admin/zones') });
+  const [mapping, setMapping] = useState<Zone | null>(null);
   const saver = useSaver('admin-zones');
   const dialog = useDialog();
   const update = useMutation({
@@ -200,6 +205,14 @@ function Zones() {
             <Money value={z.deliveryFee} />{' '}
             <Pencil className="size-3.5 text-ink-300 group-hover:text-brand-600" />
           </button>
+          <Button
+            size="sm"
+            variant={z.centerLat != null ? 'ghost' : 'soft'}
+            icon={MapPin}
+            onClick={() => setMapping(z)}
+          >
+            {z.centerLat != null ? 'على الخريطة' : 'حدد مكانها'}
+          </Button>
           <Switch
             checked={z.isActive ?? true}
             onChange={(v) => update.mutate({ id: z.id, body: { isActive: v } })}
@@ -207,7 +220,91 @@ function Zones() {
           />
         </div>
       ))}
+      {mapping && (
+        <ZoneMapModal
+          zone={mapping}
+          others={zones.data.filter((x) => x.id !== mapping.id)}
+          onClose={() => setMapping(null)}
+          onSave={(body) => {
+            update.mutate({ id: mapping.id, body });
+            setMapping(null);
+          }}
+        />
+      )}
     </TableCard>
+  );
+}
+
+function ZoneMapModal({
+  zone,
+  others,
+  onClose,
+  onSave,
+}: {
+  zone: Zone;
+  others: Zone[];
+  onClose: () => void;
+  onSave: (body: Partial<Zone>) => void;
+}) {
+  const fallback = others.find((o) => o.centerLat != null);
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
+    zone.centerLat != null ? { lat: zone.centerLat, lng: zone.centerLng! } : null,
+  );
+  const [radius, setRadius] = useState(String(zone.radiusKm ?? 2));
+  const markers: MapMarker[] = [
+    ...others
+      .filter((o) => o.centerLat != null)
+      .map((o) => ({
+        id: o.id,
+        lat: o.centerLat!,
+        lng: o.centerLng!,
+        kind: 'pin' as const,
+        label: o.name,
+      })),
+    ...(center ? [{ id: 'me', ...center, kind: 'home' as const, label: zone.name }] : []),
+  ];
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`مكان منطقة ${zone.name}`}
+      description="دوس على نص المنطقة على الخريطة، وحدد نص قطرها. العميل اللي جوه الدايرة دي هيتعرف إنه في المنطقة دي."
+      icon={MapPin}
+      size="lg"
+    >
+      <div className="space-y-4">
+        <LazyMap
+          className="h-80"
+          fit={false}
+          zoom={14}
+          center={
+            center ??
+            (fallback ? { lat: fallback.centerLat!, lng: fallback.centerLng! } : undefined)
+          }
+          markers={markers}
+          onPick={setCenter}
+        />
+        <Input
+          label="نص القطر"
+          suffix="كم"
+          inputMode="decimal"
+          dir="ltr"
+          value={radius}
+          onChange={(e) => setRadius(e.target.value)}
+        />
+        <Button
+          block
+          size="lg"
+          disabled={!center || !(Number(radius) > 0 && Number(radius) <= 50)}
+          onClick={() =>
+            center &&
+            onSave({ centerLat: center.lat, centerLng: center.lng, radiusKm: Number(radius) })
+          }
+        >
+          حفظ مكان المنطقة
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -702,6 +799,93 @@ function Leads() {
               اتواصلت معاه
             </Button>
           )}
+        </div>
+      ))}
+    </TableCard>
+  );
+}
+
+// ———— إعدادات التشغيل ————
+interface TenantSettings {
+  autoDispatch: boolean;
+  errandsEnabled: boolean;
+  errandExtraFee: number;
+}
+
+function SettingsTab() {
+  const settings = useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => get<TenantSettings>('/admin/settings'),
+  });
+  const saver = useSaver('admin-settings');
+  const dialog = useDialog();
+  const update = useMutation({
+    mutationFn: (body: Partial<TenantSettings>) => patch('/admin/settings', body),
+    ...saver,
+  });
+  if (settings.isPending) return <SkeletonList count={3} className="h-20" />;
+  if (settings.error) return <ErrorBox error={settings.error} />;
+  const s = settings.data;
+
+  async function editFee() {
+    const v = await dialog.prompt({
+      title: 'سعر المشوار الإضافي',
+      description: 'بيتضاف على سعر توصيل المنطقة في المشاوير',
+      label: 'بالجنيه',
+      defaultValue: String(s.errandExtraFee / 100),
+      inputMode: 'decimal',
+      validate: (x) => (Number.isInteger(toPiasters(x)) ? null : 'اكتب مبلغ صحيح'),
+    });
+    if (v) update.mutate({ errandExtraFee: toPiasters(v) });
+  }
+
+  const rows = [
+    {
+      title: 'التوزيع التلقائي',
+      text: 'أول ما المحل يقبل الطلب، النظام يسنده لأقرب طيار فاضي. لو مفيش طيار، الطلب بيفضل ليك توزعه بإيدك.',
+      control: (
+        <Switch
+          size="lg"
+          checked={s.autoDispatch}
+          onChange={(v) => update.mutate({ autoDispatch: v })}
+          label="التوزيع التلقائي"
+        />
+      ),
+    },
+    {
+      title: 'المشاوير',
+      text: 'العملاء يطلبوا الطيار يستلم أي حاجة من أي مكان ويوصلها ليهم.',
+      control: (
+        <Switch
+          size="lg"
+          checked={s.errandsEnabled}
+          onChange={(v) => update.mutate({ errandsEnabled: v })}
+          label="المشاوير"
+        />
+      ),
+    },
+    {
+      title: 'سعر المشوار الإضافي',
+      text: 'مبلغ بيتضاف على سعر توصيل المنطقة في كل مشوار.',
+      control: (
+        <button
+          onClick={() => void editFee()}
+          className="group flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold hover:bg-brand-50 hover:text-brand-700"
+        >
+          <Money value={s.errandExtraFee} /> <Pencil className="size-3.5 text-ink-300" />
+        </button>
+      ),
+    },
+  ];
+  return (
+    <TableCard title="إعدادات التشغيل" icon={Settings2}>
+      {rows.map((r) => (
+        <div key={r.title} className="flex items-center gap-4 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">{r.title}</div>
+            <div className="text-sm text-ink-500">{r.text}</div>
+          </div>
+          {r.control}
         </div>
       ))}
     </TableCard>

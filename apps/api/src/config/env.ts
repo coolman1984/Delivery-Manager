@@ -25,6 +25,10 @@ const envSchema = z
       .regex(/^[0-9a-f]{64}$/i, 'DATA_ENCRYPTION_KEY لازم يكون 64 حرف hex'),
     // فولدر الصور المرفوعة (صور المحلات والمنتجات)
     MEDIA_DIR: z.string().default('./media'),
+    // مفاتيح إشعارات الموبايل (اختيارية). بتتعمل بالأمر: npx web-push generate-vapid-keys
+    VAPID_PUBLIC_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().default('mailto:admin@example.com'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     SMS_PROVIDER: z.enum(['console']).default('console'),
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),

@@ -9,6 +9,7 @@ import { num } from '../lib/format';
 import { useRealtime } from '../lib/realtime';
 import type { TenantPublic } from '../lib/types';
 import { Modal } from './dialog';
+import { PushButton } from './PushButton';
 import { useToast } from './toast';
 import { Avatar, Button, cx, ErrorBox, Input } from './ui';
 
@@ -229,6 +230,7 @@ export function StaffShell({ nav, children }: { nav: NavItem[]; children: ReactN
             </NavLink>
           ))}
         </nav>
+        <PushButton dark className="mb-3 w-full" />
         {user && (
           <div className="rounded-2xl bg-white/5 p-3">
             <div className="flex items-center gap-3">
@@ -276,7 +278,10 @@ export function StaffShell({ nav, children }: { nav: NavItem[]; children: ReactN
             </button>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-5 md:px-8 md:py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-5 md:px-8 md:py-8">
+          <PushButton className="mb-4 w-full md:hidden" />
+          {children}
+        </main>
       </div>
       <BottomNav nav={nav} />
       <ChangePasswordModal open={changingPassword} onClose={() => setChangingPassword(false)} />

@@ -2,6 +2,8 @@ import { ORDER_STATUSES, OrderStatus, ROLES } from '@dm/shared';
 import {
   assignSchema,
   createOrderSchema,
+  errandCreateSchema,
+  type ErrandCreateInput,
   dateQuerySchema,
   deliverSchema,
   rateSchema,
@@ -44,6 +46,34 @@ export class OrdersController {
   @Roles(...ROLES)
   list(@CurrentActor() actor: Actor, @Query(new ZodPipe(listQuery)) q: ListQuery) {
     return this.orders.listForActor(actor, { statuses: q.status, date: q.date });
+  }
+
+  @Post('errands')
+  @Roles('customer')
+  createErrand(
+    @CurrentActor() actor: Actor,
+    @Body(new ZodPipe(errandCreateSchema)) body: ErrandCreateInput,
+  ) {
+    return this.orders.createErrand(actor, body);
+  }
+
+  @Get(':id/tracking')
+  @Roles(...ROLES)
+  tracking(@CurrentActor() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.tracking(actor, id);
+  }
+
+  @Get(':id/candidates')
+  @Roles('ops', 'admin')
+  candidates(@CurrentActor() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.candidates(actor, id);
+  }
+
+  @Post(':id/auto-assign')
+  @HttpCode(200)
+  @Roles('ops', 'admin')
+  autoAssign(@CurrentActor() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.autoAssign(actor, id);
   }
 
   @Get(':id')

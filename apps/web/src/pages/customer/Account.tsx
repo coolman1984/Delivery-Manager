@@ -14,6 +14,7 @@ import { AddressSheet } from '../../components/AddressSheet';
 import { JoinModal, type JoinType } from '../../components/JoinModal';
 import { ChangePasswordModal, useTenant } from '../../components/Shell';
 import { Art } from '../../components/visual';
+import { PushButton } from '../../components/PushButton';
 import { Avatar } from '../../components/ui';
 import { useSelectedAddress } from '../../lib/address';
 import { useAuth } from '../../lib/auth';
@@ -78,6 +79,8 @@ export default function Account() {
           </Link>
         </div>
       </div>
+
+      <PushButton className="w-full py-3" />
 
       <div className="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-ink-200/60">
         {rows.map((r) => {

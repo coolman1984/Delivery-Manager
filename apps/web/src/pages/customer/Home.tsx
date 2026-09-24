@@ -118,7 +118,7 @@ export default function Home() {
 
       <div className="space-y-8 px-4 pt-6 md:px-0">
         {/* ———— الأقسام ———— */}
-        <section className="grid grid-cols-4 gap-2.5 md:gap-4">
+        <section className="grid grid-cols-5 gap-2 md:gap-4">
           {CATEGORIES.map((t) => {
             const v = STORE_VISUAL[t];
             const active = type === t;
@@ -153,6 +153,18 @@ export default function Home() {
               </button>
             );
           })}
+          <Link to="/errand" className="group flex cursor-pointer flex-col items-center gap-2">
+            <span className="relative flex aspect-square w-full items-center justify-center rounded-3xl bg-violet-100 group-hover:bg-violet-200 md:aspect-[4/3]">
+              <Art
+                name="package"
+                className="size-[62%] transition group-active:scale-90 md:size-24"
+              />
+              <span className="absolute -top-1.5 start-1/2 translate-x-1/2 rounded-full bg-violet-600 px-2 text-[10px] font-bold text-white">
+                جديد
+              </span>
+            </span>
+            <span className="text-[13px] font-semibold text-ink-800 md:text-base">مشاوير</span>
+          </Link>
         </section>
 
         {user && <ActiveOrderBanner />}

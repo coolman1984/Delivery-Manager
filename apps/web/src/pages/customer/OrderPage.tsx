@@ -31,7 +31,9 @@ import {
 } from '../../components/ui';
 import { get, post } from '../../lib/api';
 import { num, orderNo, time } from '../../lib/format';
-import type { OrderDetail } from '../../lib/types';
+import type { OrderDetail, Tracking } from '../../lib/types';
+import { LazyMap, type MapMarker } from '../../components/LazyMap';
+import { ago } from '../../lib/format';
 
 const STEPS: Array<{ status: OrderStatus; icon: LucideIcon; label: string }> = [
   { status: 'placed', icon: Hourglass, label: 'اتطلب' },
@@ -189,6 +191,24 @@ export default function OrderPage() {
         )}
       </div>
 
+      {o.driverId && ['accepted', 'ready', 'picked_up'].includes(o.status) && (
+        <TrackingCard orderId={o.id} />
+      )}
+
+      {o.type === 'errand' && (
+        <Card className="space-y-2 text-sm">
+          <div className="font-bold">المشوار</div>
+          <div>
+            <span className="text-ink-500">الاستلام من: </span>
+            {o.pickupText}
+          </div>
+          <div>
+            <span className="text-ink-500">المطلوب: </span>
+            {o.errandDetails}
+          </div>
+        </Card>
+      )}
+
       {o.driverName && o.status !== 'delivered' && current >= 0 && (
         <Card className="flex items-center gap-3">
           <Avatar name={o.driverName} />
@@ -345,6 +365,52 @@ function RateCard({ orderId, hasDriver }: { orderId: string; hasDriver: boolean 
       <Button block disabled={store === 0} loading={rate.isPending} onClick={() => rate.mutate()}>
         إرسال التقييم
       </Button>
+    </Card>
+  );
+}
+
+/** خريطة التتبع: مكان الطيار بيتحدث كل ١٥ ثانية */
+function TrackingCard({ orderId }: { orderId: string }) {
+  const tracking = useQuery({
+    queryKey: ['tracking', orderId],
+    queryFn: () => get<Tracking>(`/orders/${orderId}/tracking`),
+    refetchInterval: 15_000,
+  });
+  const t = tracking.data;
+  if (!t || (!t.driver && !t.dropoff)) return null;
+  const markers: MapMarker[] = [];
+  if (t.pickup)
+    markers.push({
+      id: 'pickup',
+      lat: t.pickup.lat,
+      lng: t.pickup.lng,
+      kind: 'store',
+      label: t.pickup.label ?? undefined,
+    });
+  if (t.dropoff)
+    markers.push({
+      id: 'home',
+      lat: t.dropoff.lat,
+      lng: t.dropoff.lng,
+      kind: 'home',
+      label: 'إنت',
+    });
+  if (t.driver)
+    markers.push({
+      id: 'driver',
+      lat: t.driver.lat,
+      lng: t.driver.lng,
+      kind: 'driver',
+      label: 'الطيار',
+    });
+  return (
+    <Card padded={false} className="overflow-hidden">
+      <LazyMap markers={markers} className="h-64 rounded-none ring-0" />
+      {t.driver && (
+        <div className="px-5 py-3 text-sm text-ink-500">
+          آخر تحديث لمكان الطيار {ago(t.driver.lastSeenAt)}
+        </div>
+      )}
     </Card>
   );
 }

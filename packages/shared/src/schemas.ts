@@ -65,6 +65,9 @@ export const zoneCreateSchema = z.strictObject({
   name,
   deliveryFee: piasters,
   isActive: z.boolean().default(true),
+  centerLat: z.number().min(-90).max(90).optional(),
+  centerLng: z.number().min(-180).max(180).optional(),
+  radiusKm: z.number().min(0.2).max(50).optional(),
 });
 export const zoneUpdateSchema = zoneCreateSchema.partial();
 
@@ -129,7 +132,7 @@ export const deliverSchema = z.strictObject({
 });
 
 export const rateSchema = z.strictObject({
-  storeRating: z.number().int().min(1).max(5),
+  storeRating: z.number().int().min(1).max(5).optional(),
   driverRating: z.number().int().min(1).max(5).optional(),
   comment: shortText.optional(),
 });
@@ -219,3 +222,37 @@ export const leadCreateSchema = z.strictObject({
   details: shortText.optional(),
 });
 export type LeadCreateInput = z.infer<typeof leadCreateSchema>;
+
+// ———— المشاوير ————
+export const errandCreateSchema = z.strictObject({
+  clientRequestId: id,
+  /** منين الطيار هيستلم (عنوان مكتوب) */
+  pickupText: z.string().trim().min(5, 'اكتب مكان الاستلام بالتفصيل').max(300),
+  pickupLat: lat.optional(),
+  pickupLng: lng.optional(),
+  /** عنوان التسليم (من عناوين العميل) */
+  addressId: id,
+  details: z.string().trim().min(3, 'اكتب المطلوب في المشوار').max(500),
+});
+export type ErrandCreateInput = z.infer<typeof errandCreateSchema>;
+
+export const pointQuerySchema = z.strictObject({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+});
+
+export const tenantSettingsSchema = z.strictObject({
+  autoDispatch: z.boolean().optional(),
+  errandsEnabled: z.boolean().optional(),
+  errandExtraFee: piasters.optional(),
+});
+export type TenantSettingsInput = z.infer<typeof tenantSettingsSchema>;
+
+export const pushSubscribeSchema = z.strictObject({
+  endpoint: z.url().max(1000),
+  keys: z.strictObject({
+    p256dh: z.string().min(20).max(200),
+    auth: z.string().min(8).max(100),
+  }),
+});
+export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;

@@ -41,6 +41,7 @@ export const orderStatusEnum = pgEnum('order_status', ORDER_STATUSES);
 export const driverStatusEnum = pgEnum('driver_status', DRIVER_STATUSES);
 export const tenantStatusEnum = pgEnum('tenant_status', ['active', 'suspended']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash']);
+export const orderTypeEnum = pgEnum('order_type', ['delivery', 'errand']);
 export const cashDiffStatusEnum = pgEnum('cash_diff_status', [
   'none',
   'pending',
@@ -93,6 +94,10 @@ export const zones = pgTable(
     name: text('name').notNull(),
     deliveryFee: integer('delivery_fee').notNull(),
     isActive: boolean('is_active').notNull().default(true),
+    // مركز المنطقة ونص قطرها: بيتعرف منهم العميل في أنهي منطقة من مكانه على الخريطة
+    centerLat: doublePrecision('center_lat'),
+    centerLng: doublePrecision('center_lng'),
+    radiusKm: doublePrecision('radius_km').notNull().default(2),
     createdAt: createdAt(),
   },
   (t) => [unique('zones_tenant_name').on(t.tenantId, t.name)],
@@ -229,18 +234,25 @@ export const orders = pgTable(
     tenantId: tenantId(),
     number: integer('number').notNull(),
     clientRequestId: uuid('client_request_id').notNull(),
+    type: orderTypeEnum('type').notNull().default('delivery'),
     customerId: uuid('customer_id')
       .notNull()
       .references(() => users.id),
-    storeId: uuid('store_id')
-      .notNull()
-      .references(() => stores.id),
+    // فاضي في المشاوير (مفيش محل)
+    storeId: uuid('store_id').references(() => stores.id),
     driverId: uuid('driver_id').references(() => users.id),
     zoneId: uuid('zone_id')
       .notNull()
       .references(() => zones.id),
     // نسخة من العنوان وقت الطلب، عشان لو العميل عدّل عنوانه بعدين التاريخ مايتغيرش
     addressText: text('address_text').notNull(),
+    dropoffLat: doublePrecision('dropoff_lat'),
+    dropoffLng: doublePrecision('dropoff_lng'),
+    // المشاوير: منين هيستلم الطيار وإيه المطلوب
+    pickupText: text('pickup_text'),
+    pickupLat: doublePrecision('pickup_lat'),
+    pickupLng: doublePrecision('pickup_lng'),
+    errandDetails: text('errand_details'),
     customerPhone: text('customer_phone').notNull(),
     customerName: text('customer_name').notNull(),
     status: orderStatusEnum('status').notNull().default('placed'),
@@ -321,11 +333,9 @@ export const ratings = pgTable('ratings', {
   customerId: uuid('customer_id')
     .notNull()
     .references(() => users.id),
-  storeId: uuid('store_id')
-    .notNull()
-    .references(() => stores.id),
+  storeId: uuid('store_id').references(() => stores.id),
   driverId: uuid('driver_id').references(() => users.id),
-  storeRating: smallint('store_rating').notNull(),
+  storeRating: smallint('store_rating'),
   driverRating: smallint('driver_rating'),
   comment: text('comment'),
   createdAt: createdAt(),
@@ -443,4 +453,34 @@ export const leads = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('leads_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+
+// ———— إعدادات الشركة ————
+export const tenantSettings = pgTable('tenant_settings', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id),
+  // التوزيع التلقائي: أول ما المحل يقبل الطلب، يتسند لأقرب طيار فاضي
+  autoDispatch: boolean('auto_dispatch').notNull().default(false),
+  errandsEnabled: boolean('errands_enabled').notNull().default(true),
+  // سعر إضافي للمشوار فوق سعر توصيل المنطقة
+  errandExtraFee: integer('errand_extra_fee').notNull().default(0),
+  updatedAt: updatedAt(),
+});
+
+// ———— إشعارات الموبايل (حتى لو التطبيق مقفول) ————
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('push_endpoint').on(t.tenantId, t.endpoint), index('push_user_idx').on(t.userId)],
 );

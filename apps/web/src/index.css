@@ -129,3 +129,41 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* علامات الخريطة: رسمة جوه دايرة بلون حسب النوع */
+.dm-marker {
+  background: none;
+  border: none;
+}
+.dm-marker-bubble {
+  display: flex;
+  height: 44px;
+  width: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 3px var(--ring),
+    0 6px 16px rgb(0 0 0 / 0.25);
+}
+.dm-marker-bubble img {
+  height: 30px;
+  width: 30px;
+}
+.dm-marker-label {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 8px;
+  background: #1b1714;
+  padding: 1px 6px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: #fff;
+}
+.leaflet-container {
+  font-family: var(--font-sans);
+}

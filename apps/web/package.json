@@ -6,15 +6,16 @@
   "description": "الواجهات: تطبيق العميل والطيار ولوحة المحل ولوحة التشغيل",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "test": "echo 'no web tests yet'"
   },
   "dependencies": {
     "@dm/shared": "workspace:*",
     "@fontsource-variable/readex-pro": "^5.3.0",
     "@tanstack/react-query": "^5.90.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.48.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
@@ -23,12 +24,18 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
     "tailwindcss": "^4.1.13",
     "typescript": "~5.9.3",
     "vite": "^7.1.5",
-    "vite-plugin-pwa": "^1.0.3"
+    "vite-plugin-pwa": "^1.0.3",
+    "workbox-core": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   }
 }

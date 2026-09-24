@@ -18,7 +18,7 @@ interface TenantSeed {
   name: string;
   governorate: string;
   phonePrefix: string; // أول ٩ أرقام من الموبايل، والباقي رقمين بيتغيروا
-  zones: Array<[string, number]>;
+  zones: Array<[string, number, number, number, number]>;
   stores: Array<{
     name: string;
     type: 'restaurant' | 'pharmacy' | 'grocery' | 'other';
@@ -38,11 +38,11 @@ const TENANTS: TenantSeed[] = [
     governorate: 'بني سويف',
     phonePrefix: '010000000',
     zones: [
-      ['وسط البلد', 1500],
-      ['مقبل', 1500],
-      ['الأباصيري', 2000],
-      ['الزراعيين', 2000],
-      ['بني سويف الجديدة (شرق النيل)', 3500],
+      ['وسط البلد', 1500, 29.0661, 31.0994, 1.5],
+      ['مقبل', 1500, 29.056, 31.088, 1.5],
+      ['الأباصيري', 2000, 29.079, 31.1075, 1.5],
+      ['الزراعيين', 2000, 29.086, 31.093, 1.5],
+      ['بني سويف الجديدة (شرق النيل)', 3500, 29.072, 31.15, 3],
     ],
     stores: [
       {
@@ -132,11 +132,11 @@ const TENANTS: TenantSeed[] = [
     governorate: 'الفيوم',
     phonePrefix: '011000000',
     zones: [
-      ['وسط البلد', 1500],
-      ['الحادقة', 2000],
-      ['كيمان فارس', 2000],
-      ['المسلة', 1500],
-      ['الجامعة', 2500],
+      ['وسط البلد', 1500, 29.309, 30.842, 1.5],
+      ['الحادقة', 2000, 29.316, 30.853, 1.5],
+      ['كيمان فارس', 2000, 29.321, 30.834, 1.5],
+      ['المسلة', 1500, 29.3, 30.849, 1.5],
+      ['الجامعة', 2500, 29.324, 30.89, 2.5],
     ],
     stores: [
       {
@@ -215,7 +215,16 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
 
     const zoneRows = await tx
       .insert(zones)
-      .values(t.zones.map(([name, deliveryFee]) => ({ tenantId, name, deliveryFee })))
+      .values(
+        t.zones.map(([name, deliveryFee, centerLat, centerLng, radiusKm]) => ({
+          tenantId,
+          name,
+          deliveryFee,
+          centerLat,
+          centerLng,
+          radiusKm,
+        })),
+      )
       .returning();
 
     await tx.insert(users).values([
@@ -249,6 +258,9 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
           phone: phone(40 + i),
           commissionBps: s.commissionBps,
           prepMinutes: s.prepMinutes ?? 20,
+          // المحل قريب من مركز منطقته
+          lat: t.zones[s.zone]![2] + ((i % 3) - 1) * 0.003,
+          lng: t.zones[s.zone]![3] + ((i % 2) - 0.5) * 0.004,
         })
         .returning();
       await tx.insert(products).values(
@@ -284,9 +296,14 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
           phoneVerifiedAt: new Date(),
         })
         .returning();
-      await tx
-        .insert(driverProfiles)
-        .values({ userId: driver!.id, tenantId, status: i === 0 ? 'available' : 'offline' });
+      await tx.insert(driverProfiles).values({
+        userId: driver!.id,
+        tenantId,
+        status: i === 0 ? 'available' : 'offline',
+        lastLat: t.zones[i]![2],
+        lastLng: t.zones[i]![3],
+        lastSeenAt: new Date(),
+      });
     }
 
     for (const [i, name] of t.customers.entries()) {
@@ -307,6 +324,8 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
         label: 'البيت',
         zoneId: zoneRows[i]!.id,
         details: `عمارة ${i + 5}، الدور التالت، شقة ${i + 7}`,
+        lat: t.zones[i]![2] + 0.002,
+        lng: t.zones[i]![3] - 0.002,
       });
     }
   });

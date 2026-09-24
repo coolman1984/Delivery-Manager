@@ -23,30 +23,17 @@ export default defineConfig({
         start_url: '/',
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
       },
-      workbox: {
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
         // الرسومات مش بتتحمل مع أول فتحة، بتتحمل لما تظهر وتتحفظ بعدها
-        globIgnores: ['art/**', 'assets/*vietnamese*', 'assets/*latin-ext*'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) =>
-              url.pathname.startsWith('/art/') || url.pathname.startsWith('/api/v1/media/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images',
-              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 86_400 },
-            },
-          },
-          {
-            // صفحات المحلات والمنتجات: بنعرض آخر نسخة محفوظة لو النت فصل
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/catalog/'),
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'catalog',
-              expiration: { maxEntries: 100, maxAgeSeconds: 86_400 },
-            },
-          },
+        globIgnores: [
+          'art/**',
+          'assets/*vietnamese*',
+          'assets/*latin-ext*',
+          'assets/MapView*',
+          'assets/leaflet*',
         ],
       },
     }),

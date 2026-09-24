@@ -13,6 +13,9 @@ export interface Zone {
   name: string;
   deliveryFee: number;
   isActive?: boolean;
+  centerLat?: number | null;
+  centerLng?: number | null;
+  radiusKm?: number;
 }
 
 export interface StoreSummary {
@@ -62,6 +65,15 @@ export interface Address {
 export interface Order {
   id: string;
   number: number;
+  type: 'delivery' | 'errand';
+  pickupText: string | null;
+  errandDetails: string | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+  storeLat?: number | null;
+  storeLng?: number | null;
   status: OrderStatus;
   storeId: string;
   storeName?: string;
@@ -105,4 +117,13 @@ export interface DriverOverview {
   activeOrders: number;
   cashBalance: number;
   lastSeenAt: string | null;
+  lastLat: number | null;
+  lastLng: number | null;
+}
+
+export interface Tracking {
+  status: string;
+  driver: { lat: number; lng: number; lastSeenAt: string | null } | null;
+  pickup: { lat: number; lng: number; label: string | null } | null;
+  dropoff: { lat: number; lng: number } | null;
 }

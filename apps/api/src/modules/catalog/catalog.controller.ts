@@ -1,4 +1,5 @@
-import { STORE_TYPES, type StoreType } from '@dm/shared';
+import { detectZone, STORE_TYPES, type StoreType } from '@dm/shared';
+import { pointQuerySchema } from '@dm/shared/schemas';
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -25,11 +26,45 @@ export class CatalogController {
   zones(@CurrentTenant() tenant: TenantInfo) {
     return this.dbs.withTenant(tenant.id, (tx) =>
       tx
-        .select({ id: zones.id, name: zones.name, deliveryFee: zones.deliveryFee })
+        .select({
+          id: zones.id,
+          name: zones.name,
+          deliveryFee: zones.deliveryFee,
+          centerLat: zones.centerLat,
+          centerLng: zones.centerLng,
+        })
         .from(zones)
         .where(eq(zones.isActive, true))
         .orderBy(asc(zones.name)),
     );
+  }
+
+  /** العميل حدد مكانه على الخريطة: هو في أنهي منطقة؟ */
+  @Get('zones/detect')
+  detect(
+    @CurrentTenant() tenant: TenantInfo,
+    @Query(new ZodPipe(pointQuerySchema)) q: { lat: number; lng: number },
+  ) {
+    return this.dbs.withTenant(tenant.id, async (tx) => {
+      const rows = await tx
+        .select({
+          id: zones.id,
+          name: zones.name,
+          deliveryFee: zones.deliveryFee,
+          lat: zones.centerLat,
+          lng: zones.centerLng,
+          radiusKm: zones.radiusKm,
+        })
+        .from(zones)
+        .where(eq(zones.isActive, true));
+      const areas = rows
+        .filter((z) => z.lat !== null && z.lng !== null)
+        .map((z) => ({ ...z, lat: z.lat!, lng: z.lng! }));
+      const zone = detectZone(areas, q);
+      return {
+        zone: zone ? { id: zone.id, name: zone.name, deliveryFee: zone.deliveryFee } : null,
+      };
+    });
   }
 
   @Get('stores')

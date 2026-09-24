@@ -99,6 +99,52 @@ describe('🔐 تسجيل الدخول', () => {
     expect(rows[0]!.password_hash).toMatch(/^\$argon2id\$/);
   });
 
+  it('الموظف يغيّر كلمة السر بنفسه، والقديمة تبطل', async () => {
+    const phone = phones[BS].grill;
+    const store = await loginStaff(app, BS, phone);
+    expect(
+      (
+        await store.post('/auth/change-password', {
+          currentPassword: 'wrong',
+          newPassword: 'New-pass-12345',
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await store.post('/auth/change-password', {
+          currentPassword: DEMO_PASSWORD,
+          newPassword: 'short',
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await store.post('/auth/change-password', {
+          currentPassword: DEMO_PASSWORD,
+          newPassword: 'New-pass-12345',
+        })
+      ).status,
+    ).toBe(204);
+    expect((await anon.post('/auth/login', { phone, password: DEMO_PASSWORD })).status).toBe(401);
+    expect((await anon.post('/auth/login', { phone, password: 'New-pass-12345' })).status).toBe(
+      200,
+    );
+  });
+
+  it('المدير يعيّن كلمة سر جديدة لموظف نسيها', async () => {
+    const admin = await loginStaff(app, BS, phones[BS].admin);
+    const users = await admin.get('/admin/users?role=driver');
+    const target = users.body.find((u: { phone: string }) => u.phone === phones[BS].driver1);
+    expect(
+      (await admin.patch(`/admin/users/${target.id}`, { password: 'Reset-pass-123' })).status,
+    ).toBe(200);
+    expect(
+      (await anon.post('/auth/login', { phone: phones[BS].driver1, password: 'Reset-pass-123' }))
+        .status,
+    ).toBe(200);
+  });
+
   describe('تجديد الجلسة', () => {
     async function loginCookie(): Promise<string> {
       const res = await anon.post('/auth/login', {

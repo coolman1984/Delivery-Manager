@@ -4,11 +4,9 @@ import {
   canTransition,
   isAssignable,
   ORDER_STATUS_LABELS,
-  type CreateOrderInput,
-  type DeliverInput,
   type OrderStatus,
-  type RateInput,
 } from '@dm/shared';
+import { type CreateOrderInput, type DeliverInput, type RateInput } from '@dm/shared/schemas';
 import {
   BadRequestException,
   ConflictException,

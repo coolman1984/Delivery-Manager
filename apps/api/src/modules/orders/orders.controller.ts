@@ -1,17 +1,15 @@
+import { ORDER_STATUSES, OrderStatus, ROLES } from '@dm/shared';
 import {
   assignSchema,
   createOrderSchema,
   dateQuerySchema,
   deliverSchema,
-  ORDER_STATUSES,
-  OrderStatus,
   rateSchema,
   reasonSchema,
-  ROLES,
   type CreateOrderInput,
   type DeliverInput,
   type RateInput,
-} from '@dm/shared';
+} from '@dm/shared/schemas';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import type { Actor } from '../../common/auth-context';

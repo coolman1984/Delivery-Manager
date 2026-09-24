@@ -1,12 +1,14 @@
+import { ROLES, STAFF_ROLES } from '@dm/shared';
 import {
+  changePasswordSchema,
   loginSchema,
   otpRequestSchema,
   otpVerifySchema,
-  ROLES,
+  type ChangePasswordInput,
   type LoginInput,
   type OtpRequestInput,
   type OtpVerifyInput,
-} from '@dm/shared';
+} from '@dm/shared/schemas';
 import {
   Body,
   Controller,
@@ -22,7 +24,7 @@ import type { Response } from 'express';
 import type { AppRequest, AuthUser, RequestMeta, TenantInfo } from '../../common/auth-context';
 import { CurrentTenant, CurrentUser, Meta, Public, Roles } from '../../common/decorators';
 import { ZodPipe } from '../../common/zod.pipe';
-import { ENV, Env } from '../../config/env';
+import { ENV, type Env } from '../../config/env';
 import { AuthService, IssuedSession } from './auth.service';
 
 const REFRESH_COOKIE = 'dm_rt';
@@ -94,6 +96,19 @@ export class AuthController {
   async logout(@Req() req: AppRequest, @Res({ passthrough: true }) res: Response): Promise<void> {
     this.assertCsrfHeader(req);
     await this.auth.logout(this.readCookie(req));
+    res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
+  }
+
+  @Post('change-password')
+  @HttpCode(204)
+  @Roles(...STAFF_ROLES)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodPipe(changePasswordSchema)) body: ChangePasswordInput,
+    @Meta() meta: RequestMeta,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.auth.changePassword(user.tenantId, user.userId, body, meta);
     res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
   }
 

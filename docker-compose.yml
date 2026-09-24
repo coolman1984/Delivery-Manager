@@ -1,0 +1,102 @@
+# ================================================================
+# التشغيل الحقيقي على سيرفر. كل الأسرار بتيجي من ملف .env جنب الملف ده.
+# قاعدة البيانات وRedis مش ظاهرين للإنترنت خالص؛ الظاهر بس Caddy (80/443).
+# ================================================================
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?اكتب POSTGRES_PASSWORD في .env}
+      POSTGRES_DB: delivery
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--requirepass',
+        '${REDIS_PASSWORD:?اكتب REDIS_PASSWORD في .env}',
+        '--appendonly',
+        'yes',
+      ]
+    volumes: [redisdata:/data]
+    networks: [backend]
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: ['node', 'dist/db/migrate.js']
+    environment: &api-env
+      NODE_ENV: production
+      DATABASE_URL: postgres://dm_app:${APP_DB_PASSWORD:?اكتب APP_DB_PASSWORD في .env}@postgres:5432/delivery
+      MIGRATION_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/delivery
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?اكتب JWT_ACCESS_SECRET في .env}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?اكتب DATA_ENCRYPTION_KEY في .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:?اكتب CORS_ORIGINS في .env}
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      ALLOW_CONSOLE_SMS_IN_PRODUCTION: ${ALLOW_CONSOLE_SMS_IN_PRODUCTION:-false}
+      TRUST_PROXY: '1'
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [backend]
+    restart: 'no'
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      # حساب السيرفر مايعرفش كلمة سر المالك
+      MIGRATION_DATABASE_URL: ''
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+    networks: [backend, frontend]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ['no-new-privileges:true']
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DOMAINS: ${DOMAINS:?اكتب DOMAINS في .env}
+    ports: ['80:80', '443:443']
+    volumes: [caddydata:/data, caddyconfig:/config]
+    depends_on: [api]
+    networks: [frontend]
+
+  backup:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    entrypoint: ['bash', '/scripts/backup-loop.sh']
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: delivery
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?اكتب BACKUP_PASSPHRASE في .env}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes: ['./scripts:/scripts:ro', './backups:/backups']
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [backend]
+
+networks:
+  backend: { internal: true }
+  frontend: {}
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:

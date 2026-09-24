@@ -1,4 +1,5 @@
-import type { LoginInput, OtpVerifyInput, Role } from '@dm/shared';
+import type { Role } from '@dm/shared';
+import type { ChangePasswordInput, LoginInput, OtpVerifyInput } from '@dm/shared/schemas';
 import {
   BadRequestException,
   ForbiddenException,
@@ -16,9 +17,9 @@ import { CryptoService } from '../../common/crypto.service';
 import { DbService, Tx } from '../../common/db.service';
 import { RateLimitService } from '../../common/rate-limit.service';
 import { RedisService } from '../../common/redis.service';
-import { ENV, Env } from '../../config/env';
+import { ENV, type Env } from '../../config/env';
 import { refreshTokens, users } from '../../db/schema';
-import { SMS_PROVIDER, SmsProvider } from './sms.provider';
+import { SMS_PROVIDER, type SmsProvider } from './sms.provider';
 
 const OTP_TTL_SECONDS = 300;
 const OTP_MAX_ATTEMPTS = 5;
@@ -305,6 +306,50 @@ export class AuthService {
         .limit(1);
       if (row) await this.revokeFamily(tx, row.familyId);
     });
+  }
+
+  async changePassword(
+    tenantId: string,
+    userId: string,
+    input: ChangePasswordInput,
+    meta: RequestMeta,
+  ): Promise<void> {
+    await this.limiter.hit(`change-pw:${userId}`, 5, 900);
+    const newHash = await argon2.hash(input.newPassword, ARGON2_OPTIONS);
+    const ok = await this.dbs.withTenant(tenantId, async (tx) => {
+      const [user] = await tx.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!user?.passwordHash || !(await argon2.verify(user.passwordHash, input.currentPassword))) {
+        await this.audit.log(tx, {
+          tenantId,
+          actorId: userId,
+          ...meta,
+          action: 'auth.password_change_failed',
+          entityType: 'user',
+          entityId: userId,
+        });
+        return false;
+      }
+      await tx
+        .update(users)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+      // خروج من كل الأجهزة التانية
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+      await this.audit.log(tx, {
+        tenantId,
+        actorId: userId,
+        actorRole: user.role,
+        ...meta,
+        action: 'auth.password_changed',
+        entityType: 'user',
+        entityId: userId,
+      });
+      return true;
+    });
+    if (!ok) throw new BadRequestException('كلمة السر الحالية غلط');
   }
 
   async me(tenantId: string, userId: string): Promise<SessionUser> {

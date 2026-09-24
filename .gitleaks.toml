@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "قيم تجريبية معروفة في الاختبارات وملف المثال (مش أسرار حقيقية)"
+paths = ['''apps/api/vitest\.config\.ts''', '''\.env\.example''', '''\.github/workflows/ci\.yml''', '''docker-compose\.dev\.yml''']

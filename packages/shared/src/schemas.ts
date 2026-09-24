@@ -167,6 +167,13 @@ export const userCreateSchema = z
 export const userUpdateSchema = z.strictObject({
   isActive: z.boolean().optional(),
   name: name.optional(),
+  /** المدير يعيّن كلمة سر جديدة لموظف نسي كلمة السر */
+  password: passwordSchema.optional(),
+});
+
+export const changePasswordSchema = z.strictObject({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: passwordSchema,
 });
 
 export const dateQuerySchema = z.strictObject({
@@ -194,3 +201,4 @@ export type PayoutInput = z.infer<typeof payoutSchema>;
 export type ResolveCashDiffInput = z.infer<typeof resolveCashDiffSchema>;
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

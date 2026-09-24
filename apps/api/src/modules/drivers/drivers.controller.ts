@@ -1,4 +1,4 @@
-import { driverStatusSchema, locationSchema } from '@dm/shared';
+import { driverStatusSchema, locationSchema } from '@dm/shared/schemas';
 import { BadRequestException, Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Actor } from '../../common/auth-context';

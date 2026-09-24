@@ -4,7 +4,7 @@ import {
   storeOpenSchema,
   type ProductCreateInput,
   type ProductUpdateInput,
-} from '@dm/shared';
+} from '@dm/shared/schemas';
 import {
   Body,
   Controller,

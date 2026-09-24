@@ -11,7 +11,10 @@ const envSchema = z
     // اتصال السيرفر العادي: بصلاحيات محدودة، والعزل بين الشركات مفروض عليه
     DATABASE_URL: z.string().url(),
     // اتصال الترحيلات بس (إنشاء الجداول): صلاحيات المالك، مايستخدمهوش السيرفر أبداً
-    MIGRATION_DATABASE_URL: z.string().url().optional(),
+    MIGRATION_DATABASE_URL: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().url().optional(),
+    ),
     REDIS_URL: z.string().url(),
     JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET لازم يكون ٣٢ حرف على الأقل'),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
@@ -23,9 +26,27 @@ const envSchema = z
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     SMS_PROVIDER: z.enum(['console']).default('console'),
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    // للتجربة على السيرفر قبل التعاقد مع شركة رسائل: الموظفين بس يقدروا يدخلوا
+    ALLOW_CONSOLE_SMS_IN_PRODUCTION: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
   })
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV === 'production' && env.SMS_PROVIDER === 'console') {
+    for (const [key, value] of Object.entries(env)) {
+      if (typeof value === 'string' && value.includes('CHANGE_ME')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'لسه فيها قيمة المثال CHANGE_ME، غيّرها',
+        });
+      }
+    }
+    if (
+      env.NODE_ENV === 'production' &&
+      env.SMS_PROVIDER === 'console' &&
+      !env.ALLOW_CONSOLE_SMS_IN_PRODUCTION
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['SMS_PROVIDER'],

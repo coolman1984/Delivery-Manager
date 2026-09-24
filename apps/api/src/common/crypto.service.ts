@@ -7,7 +7,7 @@ import {
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto';
-import { ENV, Env } from '../config/env';
+import { ENV, type Env } from '../config/env';
 
 /**
  * تشفير البيانات الحساسة (زي الرقم القومي) بـ AES-256-GCM:

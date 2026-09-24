@@ -1,4 +1,4 @@
-import { addressCreateSchema, type AddressCreateInput } from '@dm/shared';
+import { addressCreateSchema, type AddressCreateInput } from '@dm/shared/schemas';
 import {
   BadRequestException,
   Body,

@@ -16,10 +16,19 @@
     "db:down": "docker compose -f docker-compose.dev.yml down",
     "db:migrate": "pnpm --filter @dm/api db:migrate",
     "db:seed": "pnpm --filter @dm/api db:seed",
-    "audit:deps": "pnpm audit --audit-level high"
+    "audit:deps": "pnpm audit --audit-level high",
+    "setup:env": "node scripts/setup-env.mjs",
+    "setup": "pnpm install && pnpm setup:env && pnpm --filter @dm/shared build",
+    "db:test:create": "docker compose -f docker-compose.dev.yml exec postgres createdb -U postgres delivery_test"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
     "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "file-type": ">=21.3.2",
+      "esbuild@<0.28.1": "^0.28.1"
+    }
   }
 }

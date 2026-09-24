@@ -1,19 +1,18 @@
+import { ROLES, type Role } from '@dm/shared';
 import {
-  ROLES,
   storeCreateSchema,
   storeUpdateSchema,
   userCreateSchema,
   userUpdateSchema,
   zoneCreateSchema,
   zoneUpdateSchema,
-  type Role,
   type StoreCreateInput,
   type StoreUpdateInput,
   type UserCreateInput,
   type UserUpdateInput,
   type ZoneCreateInput,
   type ZoneUpdateInput,
-} from '@dm/shared';
+} from '@dm/shared/schemas';
 import {
   BadRequestException,
   Body,
@@ -206,7 +205,7 @@ export class AdminController {
   }
 
   @Patch('users/:id')
-  updateUser(
+  async updateUser(
     @CurrentActor() actor: Actor,
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodPipe(userUpdateSchema)) body: UserUpdateInput,
@@ -214,21 +213,29 @@ export class AdminController {
     if (id === actor.userId && body.isActive === false) {
       throw new BadRequestException('مينفعش توقف حسابك بنفسك');
     }
+    const { password, ...rest } = body;
+    const passwordHash = password ? await argon2.hash(password, ARGON2_OPTIONS) : undefined;
     return this.dbs.withTenant(actor.tenantId, async (tx) => {
       const [row] = await tx
         .update(users)
-        .set({ ...body, updatedAt: new Date() })
-        .where(eq(users.id, id))
+        .set({
+          ...rest,
+          ...(passwordHash ? { passwordHash, failedLoginCount: 0, lockedUntil: null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(users.id, id), passwordHash ? ne(users.role, 'customer') : undefined))
         .returning({ id: users.id, name: users.name, isActive: users.isActive });
       if (!row) throw new NotFoundException('المستخدم مش موجود');
-      if (body.isActive === false) {
-        // إيقاف الحساب = خروجه من كل الأجهزة فوراً
+      if (body.isActive === false || passwordHash) {
+        // إيقاف الحساب أو تغيير كلمة السر = خروجه من كل الأجهزة فوراً
         await tx
           .update(refreshTokens)
           .set({ revokedAt: new Date() })
           .where(and(eq(refreshTokens.userId, id), isNull(refreshTokens.revokedAt)));
       }
-      await this.log(tx, actor, 'user.updated', 'user', id, body);
+      await this.log(tx, actor, passwordHash ? 'user.password_reset' : 'user.updated', 'user', id, {
+        fields: Object.keys(rest),
+      });
       return row;
     });
   }

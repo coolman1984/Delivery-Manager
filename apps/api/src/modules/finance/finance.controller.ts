@@ -6,7 +6,7 @@ import {
   type PayoutInput,
   type ResolveCashDiffInput,
   type SettleInput,
-} from '@dm/shared';
+} from '@dm/shared/schemas';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import type { Actor } from '../../common/auth-context';
 import { CurrentActor, Roles } from '../../common/decorators';

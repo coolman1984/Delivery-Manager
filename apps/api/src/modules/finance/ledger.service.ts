@@ -74,16 +74,14 @@ export class LedgerService {
         createdBy: posting.createdBy,
       })
       .returning({ id: journals.id });
-    await tx
-      .insert(ledgerLines)
-      .values(
-        lines.map((l) => ({
-          tenantId: posting.tenantId,
-          journalId: journal!.id,
-          accountId: l.accountId,
-          amount: l.amount,
-        })),
-      );
+    await tx.insert(ledgerLines).values(
+      lines.map((l) => ({
+        tenantId: posting.tenantId,
+        journalId: journal!.id,
+        accountId: l.accountId,
+        amount: l.amount,
+      })),
+    );
     return journal!.id;
   }
 

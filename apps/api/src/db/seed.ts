@@ -200,17 +200,15 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
           commissionBps: s.commissionBps,
         })
         .returning();
-      await tx
-        .insert(products)
-        .values(
-          s.products.map(([name, category, price]) => ({
-            tenantId,
-            storeId: store!.id,
-            name,
-            category,
-            price,
-          })),
-        );
+      await tx.insert(products).values(
+        s.products.map(([name, category, price]) => ({
+          tenantId,
+          storeId: store!.id,
+          name,
+          category,
+          price,
+        })),
+      );
       await tx.insert(users).values({
         tenantId,
         phone: phone(11 + i),

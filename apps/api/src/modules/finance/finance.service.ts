@@ -1,4 +1,4 @@
-import type { PayoutInput, ResolveCashDiffInput, SettleInput } from '@dm/shared';
+import type { PayoutInput, ResolveCashDiffInput, SettleInput } from '@dm/shared/schemas';
 import {
   BadRequestException,
   ConflictException,

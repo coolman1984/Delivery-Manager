@@ -57,6 +57,6 @@ jobs:
       - name: فحص المكتبات من الثغرات المعروفة
         run: pnpm audit --audit-level moderate
       - name: فحص إن مفيش أسرار اترفعت بالغلط
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

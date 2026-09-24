@@ -36,6 +36,13 @@
       "when": 1790281129740,
       "tag": "0004_marketing",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790282074396,
+      "tag": "0005_platform",
+      "breakpoints": true
     }
   ]
 }

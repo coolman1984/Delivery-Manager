@@ -91,7 +91,12 @@ export default function Admin() {
       {tab === 'zones' && <Zones />}
       {tab === 'stores' && <Stores />}
       {tab === 'users' && <UsersTab />}
-      {tab === 'settings' && <SettingsTab />}
+      {tab === 'settings' && (
+        <div className="space-y-4">
+          <SubscriptionCard />
+          <SettingsTab />
+        </div>
+      )}
       {tab === 'coupons' && <Coupons />}
       {tab === 'leads' && <Leads />}
       {tab === 'audit' && <Audit />}
@@ -196,6 +201,11 @@ function Zones() {
         </Button>
       }
     >
+      {zones.data.length === 0 && (
+        <p className="px-5 py-6 text-sm text-ink-500">
+          👋 أهلاً بيك! ابدأ بإضافة مناطق التوصيل وسعر كل منطقة، وبعدين المحلات، وبعدين الطيارين.
+        </p>
+      )}
       {zones.data.map((z) => (
         <div key={z.id} className="flex items-center gap-4 px-5 py-3.5">
           <span className={cx('flex-1 font-medium', !z.isActive && 'text-ink-400 line-through')}>
@@ -816,6 +826,59 @@ interface TenantSettings {
   autoDispatch: boolean;
   errandsEnabled: boolean;
   errandExtraFee: number;
+}
+
+interface Subscription {
+  planName: string | null;
+  monthlyPrice: number | null;
+  paidUntil: string | null;
+  maxStores: number | null;
+  maxDrivers: number | null;
+  usage: { stores: number; drivers: number };
+}
+
+/** باقة الشركة واشتراكها لحد إمتى (بيتجدد مع مالك المنصة) */
+function SubscriptionCard() {
+  const q = useQuery({
+    queryKey: ['admin-subscription'],
+    queryFn: () => get<Subscription>('/admin/subscription'),
+  });
+  if (!q.data?.planName) return null;
+  const s = q.data;
+  const days = s.paidUntil
+    ? Math.ceil((new Date(s.paidUntil).getTime() - Date.now()) / 86_400_000)
+    : null;
+  const tone = days === null ? 'neutral' : days < 0 ? 'danger' : days <= 7 ? 'warning' : 'success';
+  const limit = (used: number, max: number | null) =>
+    max ? `${num(used)} من ${num(max)}` : `${num(used)} (من غير حد)`;
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-white p-5 shadow-card ring-1 ring-ink-200/60">
+      <div className="flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-2xl">
+        👑
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-bold text-ink-900">
+          باقة {s.planName}
+          {s.monthlyPrice != null && (
+            <span className="ms-2 text-sm font-normal text-ink-500">
+              {money(s.monthlyPrice)} في الشهر
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-sm text-ink-500">
+          المحلات: {limit(s.usage.stores, s.maxStores)} · الطيارين:{' '}
+          {limit(s.usage.drivers, s.maxDrivers)}
+        </div>
+      </div>
+      {days !== null && (
+        <Badge tone={tone} dot>
+          {days < 0
+            ? `الاشتراك خلص من ${num(-days)} يوم — جدّده عشان الخدمة ماتقفش`
+            : `الاشتراك باقي عليه ${num(days)} يوم`}
+        </Badge>
+      )}
+    </div>
+  );
 }
 
 function SettingsTab() {

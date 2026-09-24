@@ -16,6 +16,7 @@ import { FinanceModule } from './modules/finance/finance.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { MediaModule } from './modules/media/media.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
+import { PlatformModule } from './modules/platform/platform.module';
 import { PushModule } from './modules/push/push.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -47,6 +48,7 @@ class HealthController {
     PushModule,
     MarketingModule,
     ReportsModule,
+    PlatformModule,
     AuthModule,
     CatalogModule,
     CustomersModule,

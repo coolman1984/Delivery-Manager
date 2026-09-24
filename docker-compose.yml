@@ -38,10 +38,15 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://dm_app:${APP_DB_PASSWORD:?اكتب APP_DB_PASSWORD في .env}@postgres:5432/delivery
       MIGRATION_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/delivery
+      PLATFORM_DATABASE_URL: postgres://dm_platform:${PLATFORM_DB_PASSWORD:?اكتب PLATFORM_DB_PASSWORD في .env}@postgres:5432/delivery
+      BASE_DOMAIN: ${BASE_DOMAIN:?اكتب BASE_DOMAIN في .env}
+      PLATFORM_HOST: ${PLATFORM_HOST:?اكتب PLATFORM_HOST في .env}
+      SUBSCRIPTION_GRACE_DAYS: ${SUBSCRIPTION_GRACE_DAYS:-3}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?اكتب JWT_ACCESS_SECRET في .env}
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?اكتب DATA_ENCRYPTION_KEY في .env}
-      CORS_ORIGINS: ${CORS_ORIGINS:?اكتب CORS_ORIGINS في .env}
+      # الواجهة والسيرفر على نفس العنوان، فمش محتاجين نسمح لعناوين تانية
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://${PLATFORM_HOST}}
       SMS_PROVIDER: ${SMS_PROVIDER:-console}
       OTP_ENABLED: ${OTP_ENABLED:-false}
       MEDIA_DIR: /app/media
@@ -75,7 +80,7 @@ services:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     restart: unless-stopped
     environment:
-      DOMAINS: ${DOMAINS:?اكتب DOMAINS في .env}
+      ACME_EMAIL: ${ACME_EMAIL:?اكتب ACME_EMAIL في .env}
     ports: ['80:80', '443:443']
     volumes: [caddydata:/data, caddyconfig:/config]
     depends_on: [api]

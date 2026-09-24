@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { PLATFORM_ONLY_TABLES } from '../src/db/migrate';
 import { JwtService } from '@nestjs/jwt';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -51,8 +52,21 @@ describe('🧱 عزل الشركات', () => {
       join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
       where col.table_schema = 'public' and col.column_name = 'tenant_id'`);
     expect(rows.length).toBeGreaterThan(10);
-    const unprotected = rows.filter((r) => !r.rls || !r.forced).map((r) => r.table_name);
+    // جداول المنصة (زي مدفوعات الاشتراكات) مش بيانات شركة: حساب السيرفر ممنوع منها خالص
+    const unprotected = rows
+      .filter((r) => !PLATFORM_ONLY_TABLES.includes(r.table_name))
+      .filter((r) => !r.rls || !r.forced)
+      .map((r) => r.table_name);
     expect(unprotected).toEqual([]);
+    const appUser = new URL(process.env.DATABASE_URL!).username;
+    for (const table of PLATFORM_ONLY_TABLES) {
+      const [p] = await ownerQuery<{ any: boolean }>(
+        `select has_table_privilege($1, $2, 'SELECT') or has_table_privilege($1, $2, 'INSERT')
+           or has_table_privilege($1, $2, 'UPDATE') or has_table_privilege($1, $2, 'DELETE') as any`,
+        [appUser, table],
+      );
+      expect(p!.any, table).toBe(false);
+    }
   });
 
   it('مدير تشغيل بني سويف مايشوفش طلب من الفيوم حتى لو عرف رقمه', async () => {

@@ -72,19 +72,17 @@ export async function seedHistory(tx: Tx, tenantId: string): Promise<number> {
       .insert(journals)
       .values({ tenantId, kind, refId, description, createdBy: admin!.id, createdAt: at })
       .returning();
-    await tx
-      .insert(ledgerLines)
-      .values(
-        lines
-          .filter(([, a]) => a !== 0)
-          .map(([accountId, amount]) => ({
-            tenantId,
-            journalId: j!.id,
-            accountId,
-            amount,
-            createdAt: at,
-          })),
-      );
+    await tx.insert(ledgerLines).values(
+      lines
+        .filter(([, a]) => a !== 0)
+        .map(([accountId, amount]) => ({
+          tenantId,
+          journalId: j!.id,
+          accountId,
+          amount,
+          createdAt: at,
+        })),
+    );
   };
 
   let number = 0;
@@ -153,28 +151,24 @@ export async function seedHistory(tx: Tx, tenantId: string): Promise<number> {
           closedAt: at(status === 'delivered' ? minutes : 5),
         })
         .returning();
-      await tx
-        .insert(orderItems)
-        .values(
-          lines.map((l) => ({
-            tenantId,
-            orderId: o!.id,
-            productId: l.p.id,
-            name: l.p.name,
-            unitPrice: l.p.price,
-            quantity: l.q,
-            lineTotal: l.p.price * l.q,
-          })),
-        );
-      await tx
-        .insert(orderEvents)
-        .values({
+      await tx.insert(orderItems).values(
+        lines.map((l) => ({
           tenantId,
           orderId: o!.id,
-          type: status,
-          toStatus: status,
-          createdAt: at(status === 'delivered' ? minutes : 5),
-        });
+          productId: l.p.id,
+          name: l.p.name,
+          unitPrice: l.p.price,
+          quantity: l.q,
+          lineTotal: l.p.price * l.q,
+        })),
+      );
+      await tx.insert(orderEvents).values({
+        tenantId,
+        orderId: o!.id,
+        type: status,
+        toStatus: status,
+        createdAt: at(status === 'delivered' ? minutes : 5),
+      });
       if (status !== 'delivered') continue;
 
       await post('order_delivered', o!.id, `تسليم طلب رقم ${number}`, at(minutes), [
@@ -186,16 +180,14 @@ export async function seedHistory(tx: Tx, tenantId: string): Promise<number> {
       perDriver.set(driver.id, (perDriver.get(driver.id) ?? 0) + subtotal + fee);
       const points = pointsEarned({ earnPer: 1000, pointValue: 10 }, subtotal);
       if (points > 0) {
-        await tx
-          .insert(loyaltyPoints)
-          .values({
-            tenantId,
-            customerId: customer.id,
-            orderId: o!.id,
-            points,
-            reason: 'earn',
-            createdAt: at(minutes),
-          });
+        await tx.insert(loyaltyPoints).values({
+          tenantId,
+          customerId: customer.id,
+          orderId: o!.id,
+          points,
+          reason: 'earn',
+          createdAt: at(minutes),
+        });
       }
       if (rand() < 0.6) {
         await tx.insert(ratings).values({
@@ -220,18 +212,16 @@ export async function seedHistory(tx: Tx, tenantId: string): Promise<number> {
         [cash, amount],
         [await account('driver_cash', driverId), -amount],
       ]);
-      await tx
-        .insert(settlements)
-        .values({
-          id,
-          tenantId,
-          driverId,
-          expectedAmount: amount,
-          receivedAmount: amount,
-          shortage: 0,
-          createdBy: admin!.id,
-          createdAt: when,
-        });
+      await tx.insert(settlements).values({
+        id,
+        tenantId,
+        driverId,
+        expectedAmount: amount,
+        receivedAmount: amount,
+        shortage: 0,
+        createdBy: admin!.id,
+        createdAt: when,
+      });
     }
   }
   await tx

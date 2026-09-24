@@ -26,7 +26,7 @@ import {
   Query,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../common/audit.service';
 import type { Actor } from '../../common/auth-context';
@@ -34,7 +34,16 @@ import { CryptoService } from '../../common/crypto.service';
 import { DbService, Tx } from '../../common/db.service';
 import { CurrentActor, Roles } from '../../common/decorators';
 import { ZodPipe } from '../../common/zod.pipe';
-import { auditLogs, driverProfiles, refreshTokens, stores, users, zones } from '../../db/schema';
+import {
+  auditLogs,
+  driverProfiles,
+  plans,
+  refreshTokens,
+  stores,
+  tenants,
+  users,
+  zones,
+} from '../../db/schema';
 import { ARGON2_OPTIONS } from '../auth/auth.service';
 
 const usersQuery = z.strictObject({ role: z.enum(ROLES).optional() });
@@ -111,6 +120,7 @@ export class AdminController {
   ) {
     return this.dbs.withTenant(actor.tenantId, async (tx) => {
       await this.assertZone(tx, body.zoneId);
+      await this.assertPlanRoom(tx, actor.tenantId, 'stores');
       const [row] = await tx
         .insert(stores)
         .values({ ...body, tenantId: actor.tenantId })
@@ -181,6 +191,7 @@ export class AdminController {
           .limit(1);
         if (!store) throw new BadRequestException('المحل مش موجود');
       }
+      if (body.role === 'driver') await this.assertPlanRoom(tx, actor.tenantId, 'drivers');
       const [row] = await tx
         .insert(users)
         .values({
@@ -240,6 +251,21 @@ export class AdminController {
     });
   }
 
+  // ———— الاشتراك ————
+  /** باقة الشركة وتاريخ انتهاء الاشتراك، واستهلاكها من حدود الباقة */
+  @Get('subscription')
+  subscription(@CurrentActor() actor: Actor) {
+    return this.dbs.withTenant(actor.tenantId, async (tx) => {
+      const sub = await this.plan(tx, actor.tenantId);
+      const [s] = await tx.select({ n: count() }).from(stores);
+      const [d] = await tx
+        .select({ n: count() })
+        .from(users)
+        .where(and(eq(users.role, 'driver'), eq(users.isActive, true)));
+      return { ...sub, usage: { stores: s?.n ?? 0, drivers: d?.n ?? 0 } };
+    });
+  }
+
   // ———— سجل العمليات ————
   @Get('audit-logs')
   auditLogs(@CurrentActor() actor: Actor, @Query(new ZodPipe(auditQuery)) q: { limit: number }) {
@@ -262,6 +288,54 @@ export class AdminController {
         .orderBy(desc(auditLogs.createdAt))
         .limit(q.limit),
     );
+  }
+
+  private async plan(tx: Tx, tenantId: string) {
+    const [row] = await tx
+      .select({
+        paidUntil: tenants.paidUntil,
+        planName: plans.name,
+        monthlyPrice: plans.monthlyPrice,
+        maxStores: plans.maxStores,
+        maxDrivers: plans.maxDrivers,
+      })
+      .from(tenants)
+      .leftJoin(plans, eq(plans.id, tenants.planId))
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    return (
+      row ?? {
+        paidUntil: null,
+        planName: null,
+        monthlyPrice: null,
+        maxStores: null,
+        maxDrivers: null,
+      }
+    );
+  }
+
+  /** حدود الباقة: عدد المحلات والطيارين المسموح بيهم */
+  private async assertPlanRoom(
+    tx: Tx,
+    tenantId: string,
+    kind: 'stores' | 'drivers',
+  ): Promise<void> {
+    const sub = await this.plan(tx, tenantId);
+    const max = kind === 'stores' ? sub.maxStores : sub.maxDrivers;
+    if (max === null) return;
+    const [row] =
+      kind === 'stores'
+        ? await tx.select({ n: count() }).from(stores)
+        : await tx
+            .select({ n: count() })
+            .from(users)
+            .where(and(eq(users.role, 'driver'), eq(users.isActive, true)));
+    if ((row?.n ?? 0) >= max) {
+      const label = kind === 'stores' ? 'المحلات' : 'الطيارين';
+      throw new BadRequestException(
+        `وصلت للحد الأقصى لعدد ${label} في باقتك (${max.toLocaleString('ar-EG')}). كلّمنا عشان تكبّر الباقة`,
+      );
+    }
   }
 
   private async assertZone(tx: Tx, zoneId: string): Promise<void> {

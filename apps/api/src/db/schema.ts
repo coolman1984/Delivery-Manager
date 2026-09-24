@@ -72,8 +72,81 @@ export const tenants = pgTable('tenants', {
   name: text('name').notNull(),
   governorate: text('governorate').notNull(),
   status: tenantStatusEnum('status').notNull().default('active'),
+  // الاشتراك (بيتحكم فيه مالك المنصة بس)
+  planId: uuid('plan_id').references(() => plans.id),
+  paidUntil: timestamp('paid_until', { withTimezone: true }),
+  contactName: text('contact_name'),
+  contactPhone: text('contact_phone'),
+  notes: text('notes'),
+  suspendedReason: text('suspended_reason'),
   createdAt: createdAt(),
 });
+
+// ———— المنصة (مالك المنصة بيبيع الخدمة للشركات) ————
+// الجداول دي مالهاش ختم شركة: حساب السيرفر العادي مالوش أي صلاحية عليها،
+// وبيتعامل معاها حساب قاعدة بيانات منفصل خاص بلوحة مالك المنصة.
+
+/** الباقات: السعر الشهري وحدود كل باقة */
+export const plans = pgTable('plans', {
+  id: id(),
+  name: text('name').notNull().unique(),
+  monthlyPrice: integer('monthly_price').notNull(),
+  maxStores: integer('max_stores'),
+  maxDrivers: integer('max_drivers'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/** مدفوعات الاشتراكات: كل دفعة سطر، وممنوع التعديل أو المسح */
+export const subscriptionPayments = pgTable(
+  'subscription_payments',
+  {
+    id: id(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    amount: integer('amount').notNull(),
+    months: smallint('months').notNull(),
+    periodFrom: timestamp('period_from', { withTimezone: true }).notNull(),
+    periodTo: timestamp('period_to', { withTimezone: true }).notNull(),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => platformAdmins.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('subscription_payments_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+
+/** حسابات مالك المنصة: دخول بالإيميل وكلمة سر وكود من تطبيق على الموبايل */
+export const platformAdmins = pgTable('platform_admins', {
+  id: id(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  totpSecretEnc: text('totp_secret_enc'),
+  totpEnabledAt: timestamp('totp_enabled_at', { withTimezone: true }),
+  failedLoginCount: integer('failed_login_count').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  tokenVersion: integer('token_version').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** سجل عمليات مالك المنصة (ممنوع التعديل أو المسح) */
+export const platformAuditLogs = pgTable(
+  'platform_audit_logs',
+  {
+    id: id(),
+    adminId: uuid('admin_id').references(() => platformAdmins.id),
+    action: text('action').notNull(),
+    targetTenantId: uuid('target_tenant_id').references(() => tenants.id),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    meta: jsonb('meta'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('platform_audit_created_idx').on(t.createdAt)],
+);
 
 export const tenantCounters = pgTable(
   'tenant_counters',

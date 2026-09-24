@@ -13,6 +13,8 @@ import { AppRequest, AuthUser } from './auth-context';
 import { IS_PUBLIC, ROLES_KEY } from './decorators';
 import { TenantsService } from './tenants.service';
 
+const SUSPENDED = 'الخدمة متوقفة مؤقتاً. كلّم إدارة الشركة';
+
 interface AccessPayload {
   sub: string;
   tid: string;
@@ -46,7 +48,8 @@ export class AuthGuard implements CanActivate {
     if (token) {
       req.user = await this.verify(token);
       const tenant = await this.tenants.findById(req.user.tenantId);
-      if (!tenant) throw new UnauthorizedException('الشركة موقوفة');
+      if (!tenant) throw new UnauthorizedException('انتهت الجلسة، سجل دخول تاني');
+      if (!tenant.active) throw new ForbiddenException(SUSPENDED);
       if (headerSlug && headerSlug !== tenant.slug) {
         throw new ForbiddenException('الحساب ده تبع شركة تانية');
       }
@@ -54,6 +57,7 @@ export class AuthGuard implements CanActivate {
     } else if (headerSlug) {
       const tenant = await this.tenants.findBySlug(headerSlug);
       if (!tenant) throw new NotFoundException('الشركة مش موجودة');
+      if (!tenant.active) throw new ForbiddenException(SUSPENDED);
       req.tenant = tenant;
     }
 

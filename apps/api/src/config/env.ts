@@ -15,6 +15,17 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.string().url().optional(),
     ),
+    // لوحة مالك المنصة: حساب قاعدة بيانات منفصل. لو مش موجود، اللوحة مقفولة خالص
+    PLATFORM_DATABASE_URL: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().url().optional(),
+    ),
+    // لو اتكتب (مثلاً admin.example.com) لوحة المنصة مش هتشتغل غير من العنوان ده
+    PLATFORM_HOST: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+    // أيام السماح بعد انتهاء الاشتراك قبل ما الشركة تتوقف تلقائي
+    SUBSCRIPTION_GRACE_DAYS: z.coerce.number().int().min(0).max(30).default(3),
+    // العنوان الأساسي (مثلاً example.com): كل شركة بتبقى على slug.example.com
+    BASE_DOMAIN: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
     REDIS_URL: z.string().url(),
     JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET لازم يكون ٣٢ حرف على الأقل'),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),

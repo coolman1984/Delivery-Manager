@@ -312,3 +312,74 @@ export const reportQuerySchema = z.strictObject({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+// ———— لوحة مالك المنصة ————
+/** أسماء محجوزة ماينفعش تبقى اسم شركة (عشان العناوين الفرعية) */
+export const RESERVED_SLUGS = ['admin', 'api', 'www', 'platform', 'app', 'mail', 'static'];
+
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(120)
+  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'الإيميل مش صحيح');
+
+export const platformLoginSchema = z.strictObject({
+  email: emailSchema,
+  password: z.string().min(1).max(128),
+  code: otpCodeSchema.optional(),
+});
+
+export const platformEnrollSchema = z.strictObject({
+  enrollToken: z.string().min(20).max(2000),
+  code: otpCodeSchema,
+});
+
+const limit = z.number().int().min(1).max(10_000).nullable();
+export const planCreateSchema = z.strictObject({
+  name: z.string().trim().min(2).max(40),
+  monthlyPrice: piasters,
+  maxStores: limit,
+  maxDrivers: limit,
+});
+export const planUpdateSchema = planCreateSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+export const platformTenantCreateSchema = z.strictObject({
+  slug: tenantSlugSchema.refine((s) => !RESERVED_SLUGS.includes(s), 'الاسم ده محجوز'),
+  name,
+  governorate: name,
+  planId: id,
+  trialDays: z.number().int().min(0).max(90).default(14),
+  adminName: name,
+  adminPhone: phoneSchema,
+  contactPhone: phoneSchema.optional(),
+});
+
+export const platformTenantUpdateSchema = z.strictObject({
+  name: name.optional(),
+  governorate: name.optional(),
+  planId: id.optional(),
+  contactName: name.nullable().optional(),
+  contactPhone: phoneSchema.nullable().optional(),
+  notes: shortText.nullable().optional(),
+});
+
+export const tenantSuspendSchema = z.strictObject({
+  reason: z.string().trim().min(3, 'اكتب السبب').max(200),
+});
+
+export const subscriptionPaymentSchema = z.strictObject({
+  months: z.number().int().min(1).max(24),
+  amount: piasters.optional(),
+  note: z.string().trim().max(200).optional(),
+});
+
+export type PlatformLoginInput = z.infer<typeof platformLoginSchema>;
+export type PlatformEnrollInput = z.infer<typeof platformEnrollSchema>;
+export type PlanCreateInput = z.infer<typeof planCreateSchema>;
+export type PlanUpdateInput = z.infer<typeof planUpdateSchema>;
+export type PlatformTenantCreateInput = z.infer<typeof platformTenantCreateSchema>;
+export type PlatformTenantUpdateInput = z.infer<typeof platformTenantUpdateSchema>;
+export type SubscriptionPaymentInput = z.infer<typeof subscriptionPaymentSchema>;

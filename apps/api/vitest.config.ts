@@ -19,6 +19,11 @@ export default defineConfig({
       MIGRATION_DATABASE_URL:
         process.env.TEST_MIGRATION_DATABASE_URL ??
         'postgres://postgres:dev_owner_password@localhost:5432/delivery_test',
+      PLATFORM_DATABASE_URL:
+        process.env.TEST_PLATFORM_DATABASE_URL ??
+        'postgres://dm_platform_test:test_platform_password_1234@localhost:5432/delivery_test',
+      BASE_DOMAIN: 'example.test',
+      PLATFORM_HOST: '127.0.0.1',
       REDIS_URL: process.env.TEST_REDIS_URL ?? 'redis://localhost:6379/15',
       JWT_ACCESS_SECRET: 'test-secret-that-is-long-enough-for-hs256-signing',
       DATA_ENCRYPTION_KEY: '0'.repeat(64),

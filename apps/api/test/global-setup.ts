@@ -9,11 +9,14 @@ export default async function setup(): Promise<void> {
   const appUrl =
     process.env.TEST_DATABASE_URL ??
     'postgres://dm_app_test:test_app_password_1234@localhost:5432/delivery_test';
+  const platformUrl =
+    process.env.TEST_PLATFORM_DATABASE_URL ??
+    'postgres://dm_platform_test:test_platform_password_1234@localhost:5432/delivery_test';
   const client = new Client({ connectionString: ownerUrl });
   await client.connect();
   await client.query(
     'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;',
   );
   await client.end();
-  await runMigrations(ownerUrl, appUrl);
+  await runMigrations(ownerUrl, appUrl, platformUrl);
 }

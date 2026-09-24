@@ -10,7 +10,10 @@ import {
   addresses,
   coupons,
   driverProfiles,
+  plans,
+  platformAdmins,
   products,
+  subscriptionPayments,
   stores,
   tenants,
   users,
@@ -28,6 +31,7 @@ interface TenantSeed {
   name: string;
   governorate: string;
   phonePrefix: string; // أول ٩ أرقام من الموبايل، والباقي رقمين بيتغيروا
+  paidDays: number; // باقي كام يوم في الاشتراك التجريبي
   zones: Array<[string, number, number, number, number]>;
   stores: Array<{
     name: string;
@@ -47,6 +51,7 @@ const TENANTS: TenantSeed[] = [
     name: 'توصيل بني سويف',
     governorate: 'بني سويف',
     phonePrefix: '010000000',
+    paidDays: 24,
     zones: [
       ['وسط البلد', 1500, 29.0661, 31.0994, 1.5],
       ['مقبل', 1500, 29.056, 31.088, 1.5],
@@ -141,6 +146,7 @@ const TENANTS: TenantSeed[] = [
     name: 'توصيل الفيوم',
     governorate: 'الفيوم',
     phonePrefix: '011000000',
+    paidDays: 5,
     zones: [
       ['وسط البلد', 1500, 29.309, 30.842, 1.5],
       ['الحادقة', 2000, 29.316, 30.853, 1.5],
@@ -204,11 +210,36 @@ const TENANTS: TenantSeed[] = [
 
 type Db = NodePgDatabase<typeof schema>;
 
+/** إيميل مالك المنصة التجريبي (أول دخول هيطلب منك تسجّل تطبيق الكود على موبايلك) */
+export const DEMO_PLATFORM_EMAIL = 'owner@demo.local';
+const DAY_MS = 86_400_000;
+
+async function seedPlatform(db: Db, passwordHash: string): Promise<string> {
+  const [existing] = await db.select({ id: plans.id }).from(plans).limit(1);
+  if (!existing) {
+    await db.insert(plans).values([
+      { name: 'البداية', monthlyPrice: 150_000, maxStores: 15, maxDrivers: 5 },
+      { name: 'النمو', monthlyPrice: 300_000, maxStores: 50, maxDrivers: 20 },
+      { name: 'المحترف', monthlyPrice: 600_000, maxStores: null, maxDrivers: null },
+    ]);
+    await db
+      .insert(platformAdmins)
+      .values({ email: DEMO_PLATFORM_EMAIL, name: 'مالك المنصة', passwordHash })
+      .onConflictDoNothing();
+  }
+  const [growth] = await db
+    .select({ id: plans.id })
+    .from(plans)
+    .where(sql`${plans.name} = 'النمو'`);
+  return growth!.id;
+}
+
 async function seedTenant(
   db: Db,
   t: TenantSeed,
   passwordHash: string,
   history: boolean,
+  planId: string,
 ): Promise<void> {
   const existing = await db
     .select({ id: tenants.id })
@@ -218,11 +249,29 @@ async function seedTenant(
     console.log(`⏭️  ${t.name} موجودة قبل كده`);
     return;
   }
+  // اشتراك تجريبي: دفعوا شهر، وباقي عليه أيام مختلفة في كل شركة عشان اللوحة تبان
+  const paidUntil = new Date(Date.now() + t.paidDays * DAY_MS);
   const [tenant] = await db
     .insert(tenants)
-    .values({ slug: t.slug, name: t.name, governorate: t.governorate })
+    .values({
+      slug: t.slug,
+      name: t.name,
+      governorate: t.governorate,
+      planId,
+      paidUntil,
+      contactName: 'مدير الشركة',
+      contactPhone: `${t.phonePrefix}01`,
+    })
     .returning();
   const tenantId = tenant!.id;
+  await db.insert(subscriptionPayments).values({
+    tenantId,
+    amount: 300_000,
+    months: 1,
+    periodFrom: new Date(paidUntil.getTime() - 30 * DAY_MS),
+    periodTo: paidUntil,
+    note: 'دفعة تجريبية',
+  });
   const phone = (n: number) => `${t.phonePrefix}${String(n).padStart(2, '0')}`;
 
   await db.transaction(async (tx) => {
@@ -386,7 +435,8 @@ export async function seed(
   const db = drizzle(pool, { schema });
   try {
     const passwordHash = await argon2.hash(DEMO_PASSWORD, ARGON2_OPTIONS);
-    for (const t of TENANTS) await seedTenant(db, t, passwordHash, opts.history ?? false);
+    const planId = await seedPlatform(db, passwordHash);
+    for (const t of TENANTS) await seedTenant(db, t, passwordHash, opts.history ?? false, planId);
   } finally {
     await pool.end();
   }
@@ -406,6 +456,7 @@ if (require.main === module) {
   seed(url, { history: !process.argv.includes('--no-history') })
     .then(() => {
       console.log(`\n🔑 كلمة السر لكل الحسابات التجريبية: ${DEMO_PASSWORD}`);
+      console.log(`👑 لوحة مالك المنصة: /platform — الإيميل ${DEMO_PLATFORM_EMAIL}`);
       console.log('📖 أرقام الحسابات موجودة في ملف README.md');
     })
     .catch((err: unknown) => {

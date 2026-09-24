@@ -1,5 +1,5 @@
 # ---- بناء الواجهات ----
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./

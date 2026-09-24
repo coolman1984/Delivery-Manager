@@ -2,6 +2,7 @@ import {
   productCreateSchema,
   productUpdateSchema,
   storeOpenSchema,
+  storePrepSchema,
   type ProductCreateInput,
   type ProductUpdateInput,
 } from '@dm/shared/schemas';
@@ -43,12 +44,30 @@ export class StoreSelfController {
           type: stores.type,
           isOpen: stores.isOpen,
           commissionBps: stores.commissionBps,
+          prepMinutes: stores.prepMinutes,
+          logoUrl: stores.logoUrl,
+          coverUrl: stores.coverUrl,
         })
         .from(stores)
         .where(eq(stores.id, storeId)),
     );
     if (!store) throw new NotFoundException('المحل مش موجود');
     return store;
+  }
+
+  @Patch('me/prep')
+  async setPrep(
+    @CurrentActor() actor: Actor,
+    @Body(new ZodPipe(storePrepSchema)) body: { prepMinutes: number },
+  ) {
+    const storeId = this.storeId(actor);
+    await this.dbs.withTenant(actor.tenantId, (tx) =>
+      tx
+        .update(stores)
+        .set({ prepMinutes: body.prepMinutes, updatedAt: new Date() })
+        .where(eq(stores.id, storeId)),
+    );
+    return body;
   }
 
   @Patch('me/open')

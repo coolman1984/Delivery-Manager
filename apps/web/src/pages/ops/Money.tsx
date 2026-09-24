@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, CircleCheck, HandCoins, Receipt, Store, TriangleAlert } from 'lucide-react';
+import { Banknote, CircleCheck, HandCoins, ScrollText, Store, TriangleAlert } from 'lucide-react';
 import { useDialog } from '../../components/dialog';
 import { useToast } from '../../components/toast';
 import {
@@ -231,7 +231,7 @@ export default function Money() {
         </Card>
 
         <Card className="xl:col-span-2">
-          <SectionTitle icon={Receipt}>تسويات النهارده</SectionTitle>
+          <SectionTitle icon={ScrollText}>تسويات النهارده</SectionTitle>
           {settlements.data?.length === 0 && (
             <p className="py-6 text-center text-sm text-ink-500">مفيش تسويات النهارده لسه</p>
           )}

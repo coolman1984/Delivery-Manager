@@ -10,7 +10,7 @@ import {
   MapPin,
   PackageCheck,
   Phone,
-  Receipt,
+  ScrollText,
   Star,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,36 +41,46 @@ const STEPS: Array<{ status: OrderStatus; icon: LucideIcon; label: string }> = [
   { status: 'delivered', icon: CircleCheck, label: 'وصل' },
 ];
 
+const HERO_ART: Record<OrderStatus, string> = {
+  placed: 'stopwatch',
+  accepted: 'cook',
+  ready: 'package',
+  picked_up: 'courier',
+  delivered: 'party',
+  rejected: 'receipt',
+  cancelled: 'receipt',
+};
+
 const HERO: Record<OrderStatus, { title: string; text: string; icon: LucideIcon; tone: string }> = {
   placed: {
     title: 'مستنيين المحل يأكد طلبك',
     text: 'عادةً بياخد دقيقة أو اتنين',
     icon: Hourglass,
-    tone: 'from-brand-600 to-amber-500',
+    tone: 'from-brand-700 to-brand-500',
   },
   accepted: {
     title: 'طلبك بيتحضّر',
     text: 'المحل شغال عليه دلوقتي',
     icon: ChefHat,
-    tone: 'from-brand-600 to-amber-500',
+    tone: 'from-brand-700 to-brand-500',
   },
   ready: {
     title: 'طلبك جاهز',
     text: 'الطيار في طريقه يستلمه',
     icon: PackageCheck,
-    tone: 'from-brand-600 to-amber-500',
+    tone: 'from-brand-700 to-brand-500',
   },
   picked_up: {
     title: 'الطيار في الطريق ليك',
     text: 'جهّز الفلوس كاش لو سمحت',
     icon: Bike,
-    tone: 'from-brand-600 to-amber-500',
+    tone: 'from-brand-700 to-brand-500',
   },
   delivered: {
     title: 'وصلك بالهنا والشفا',
     text: 'شكراً إنك طلبت مننا',
     icon: CircleCheck,
-    tone: 'from-emerald-600 to-teal-500',
+    tone: 'from-emerald-600 to-brand-500',
   },
   rejected: {
     title: 'المحل اعتذر عن الطلب',
@@ -127,8 +137,13 @@ export default function OrderPage() {
           hero.tone,
         )}
       >
-        <hero.icon className="absolute -top-6 -left-6 size-32 text-white/10" strokeWidth={1.4} />
-        <div className="relative">
+        <div className="absolute -top-10 -left-10 size-44 rounded-full bg-white/10" />
+        <img
+          src={`/art/${HERO_ART[o.status]}.webp`}
+          alt=""
+          className="absolute top-3 left-3 size-24 drop-shadow-xl md:size-28"
+        />
+        <div className="relative max-w-[65%]">
           <div className="text-sm text-white/80">{o.storeName}</div>
           <h2 className="mt-1 text-2xl font-bold">{hero.title}</h2>
           {(hero.text || o.reason) && <p className="mt-1 text-white/85">{o.reason ?? hero.text}</p>}
@@ -202,7 +217,7 @@ export default function OrderPage() {
       )}
 
       <Card>
-        <SectionTitle icon={Receipt}>تفاصيل الطلب</SectionTitle>
+        <SectionTitle icon={ScrollText}>تفاصيل الطلب</SectionTitle>
         <ul className="tabular space-y-2.5 text-sm">
           {o.items.map((it, i) => (
             <li key={i} className="flex justify-between gap-3">

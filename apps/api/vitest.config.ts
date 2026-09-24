@@ -24,6 +24,7 @@ export default defineConfig({
       DATA_ENCRYPTION_KEY: '0'.repeat(64),
       SMS_PROVIDER: 'console',
       OTP_ENABLED: 'true',
+      MEDIA_DIR: '/tmp/dm-test-media',
     },
   },
   plugins: [swc.vite({ module: { type: 'es6' } })],

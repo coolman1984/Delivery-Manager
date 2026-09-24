@@ -23,6 +23,9 @@ export interface StoreSummary {
   zoneName?: string;
   rating?: number | null;
   ratingCount?: number;
+  logoUrl?: string | null;
+  coverUrl?: string | null;
+  prepMinutes?: number;
 }
 
 export interface TenantPublic {
@@ -38,6 +41,7 @@ export interface Product {
   description: string | null;
   category: string | null;
   price: number;
+  imageUrl?: string | null;
   isAvailable?: boolean;
 }
 

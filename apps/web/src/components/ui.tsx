@@ -476,20 +476,26 @@ export function FullPageLoader() {
 
 export function EmptyState({
   icon: Icon,
+  art,
   title,
   text,
   action,
 }: {
   icon: LucideIcon;
+  art?: string;
   title: string;
   text?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center px-6 py-14 text-center">
-      <div className="mb-4 flex size-16 items-center justify-center rounded-3xl bg-brand-50 text-brand-600">
-        <Icon className="size-8" strokeWidth={1.8} />
-      </div>
+      {art ? (
+        <img src={`/art/${art}.webp`} alt="" className="mb-4 size-28 drop-shadow-lg" />
+      ) : (
+        <div className="mb-4 flex size-16 items-center justify-center rounded-3xl bg-brand-50 text-brand-600">
+          <Icon className="size-8" strokeWidth={1.8} />
+        </div>
+      )}
       <h3 className="font-bold text-ink-900">{title}</h3>
       {text && <p className="mt-1 max-w-xs text-sm text-ink-500">{text}</p>}
       {action && <div className="mt-5">{action}</div>}

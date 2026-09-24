@@ -28,6 +28,7 @@ export default function Orders() {
       {orders.data?.length === 0 && (
         <EmptyState
           icon={Package}
+          art="takeout"
           title="لسه ماطلبتش حاجة"
           text="أول طلب ليك هيظهر هنا وتقدر تتابعه لحظة بلحظة"
           action={
@@ -63,9 +64,13 @@ function OrderGroup({
             className={`flex items-center gap-4 rounded-3xl bg-white p-4 shadow-card ring-1 transition hover:shadow-lift ${highlight ? 'ring-brand-200' : 'ring-ink-200/60'}`}
           >
             <div
-              className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${highlight ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-500'}`}
+              className={`flex size-14 shrink-0 items-center justify-center rounded-2xl ${highlight ? 'bg-brand-50' : 'bg-[#efe9dd]'}`}
             >
-              <Package className="size-6" />
+              <img
+                src={highlight ? '/art/courier.webp' : '/art/takeout.webp'}
+                alt=""
+                className="size-10"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">

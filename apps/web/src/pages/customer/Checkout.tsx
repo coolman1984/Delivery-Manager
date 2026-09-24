@@ -28,7 +28,9 @@ import {
 import { get, post } from '../../lib/api';
 import { useCart } from '../../lib/cart';
 import { money } from '../../lib/format';
-import type { Address, Order, Zone } from '../../lib/types';
+import type { Address, Order } from '../../lib/types';
+import { useSelectedAddress } from '../../lib/address';
+import { AddAddressModal } from '../../components/AddressSheet';
 import { Stepper } from './StorePage';
 
 export default function Checkout() {
@@ -39,13 +41,16 @@ export default function Checkout() {
     queryKey: ['addresses'],
     queryFn: () => get<Address[]>('/me/addresses'),
   });
+  const preferred = useSelectedAddress();
   const [addressId, setAddressId] = useState<string>('');
   const [note, setNote] = useState('');
   const [adding, setAdding] = useState(false);
   // رقم ثابت لمحاولة الطلب دي: لو النت فصل وضغط تاني، الطلب مايتكررش
   const [requestId] = useState(() => crypto.randomUUID());
 
-  const selected = addresses.data?.find((a) => a.id === (addressId || addresses.data?.[0]?.id));
+  const selected = addresses.data?.find(
+    (a) => a.id === (addressId || preferred.address?.id || addresses.data?.[0]?.id),
+  );
   const total = cart.subtotal + (selected?.deliveryFee ?? 0);
 
   const place = useMutation({
@@ -68,6 +73,7 @@ export default function Checkout() {
     return (
       <EmptyState
         icon={ShoppingBag}
+        art="cart"
         title="السلة فاضية"
         text="اختار محل وضيف اللي نفسك فيه"
         action={
@@ -132,7 +138,10 @@ export default function Checkout() {
                     key={a.id}
                     role="radio"
                     aria-checked={active}
-                    onClick={() => setAddressId(a.id)}
+                    onClick={() => {
+                      setAddressId(a.id);
+                      preferred.select(a.id);
+                    }}
                     className={cx(
                       'flex w-full cursor-pointer items-start gap-3 rounded-2xl p-3.5 text-start ring-1 transition',
                       active
@@ -257,94 +266,5 @@ export default function Checkout() {
         onAdded={(id) => setAddressId(id)}
       />
     </div>
-  );
-}
-
-function AddAddressModal({
-  open,
-  onClose,
-  onAdded,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onAdded: (id: string) => void;
-}) {
-  const [zoneId, setZoneId] = useState('');
-  const [label, setLabel] = useState('البيت');
-  const [details, setDetails] = useState('');
-  const queryClient = useQueryClient();
-  const zones = useQuery({
-    queryKey: ['catalog', 'zones'],
-    queryFn: () => get<Zone[]>('/catalog/zones'),
-    enabled: open,
-  });
-  const add = useMutation({
-    mutationFn: () => post<{ id: string }>('/me/addresses', { label, zoneId, details }),
-    onSuccess: async (res) => {
-      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      onAdded(res.id);
-      onClose();
-      setDetails('');
-    },
-  });
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    add.mutate();
-  }
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="عنوان جديد"
-      description="اكتب العنوان بالتفصيل عشان الطيار يوصلك بسرعة"
-      icon={MapPinned}
-    >
-      <form onSubmit={submit} className="space-y-4">
-        <Select label="المنطقة" value={zoneId} onChange={(e) => setZoneId(e.target.value)} required>
-          <option value="">اختار المنطقة</option>
-          {zones.data?.map((z) => (
-            <option key={z.id} value={z.id}>
-              {z.name} — توصيل {money(z.deliveryFee)}
-            </option>
-          ))}
-        </Select>
-        <div className="flex gap-2">
-          {['البيت', 'الشغل', 'عند أهلي'].map((l) => (
-            <button
-              type="button"
-              key={l}
-              onClick={() => setLabel(l)}
-              className={cx(
-                'cursor-pointer rounded-full px-3.5 py-1.5 text-sm transition',
-                label === l ? 'bg-ink-900 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
-              )}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <Input
-          label="اسم العنوان"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          maxLength={40}
-          required
-        />
-        <Textarea
-          label="العنوان بالتفصيل"
-          placeholder="الشارع، رقم العمارة، الدور، الشقة، وأي علامة مميزة"
-          rows={3}
-          value={details}
-          onChange={(e) => setDetails(e.target.value)}
-          minLength={5}
-          maxLength={300}
-          required
-        />
-        {add.error && <ErrorBox error={add.error} />}
-        <Button type="submit" size="lg" block loading={add.isPending}>
-          حفظ العنوان
-        </Button>
-      </form>
-    </Modal>
   );
 }

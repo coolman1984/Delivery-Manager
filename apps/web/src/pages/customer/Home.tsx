@@ -1,156 +1,404 @@
-import {
-  ACTIVE_ORDER_STATUSES,
-  ORDER_STATUS_LABELS,
-  STORE_TYPES,
-  type StoreType,
-} from '@dm/shared';
+import { ACTIVE_ORDER_STATUSES, ORDER_STATUS_LABELS, type StoreType } from '@dm/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Banknote, ChevronLeft, MapPin, Search, Star, Store as StoreIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  Clock,
+  MapPin,
+  Search,
+  Star,
+  Store as StoreIcon,
+  X,
+} from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { cx, EmptyState, ErrorBox, Input, Skeleton } from '../../components/ui';
+import { AddressSheet } from '../../components/AddressSheet';
+import { JoinModal, type JoinType } from '../../components/JoinModal';
+import { useTenant } from '../../components/Shell';
+import { Art, StoreCover, StoreLogo } from '../../components/visual';
+import { cx, EmptyState, ErrorBox, Skeleton } from '../../components/ui';
 import { get } from '../../lib/api';
+import { useSelectedAddress, useZones } from '../../lib/address';
 import { useAuth } from '../../lib/auth';
-import { greeting, num, orderNo } from '../../lib/format';
+import { money, num, orderNo } from '../../lib/format';
 import type { Order, StoreSummary } from '../../lib/types';
-import { STORE_VISUAL } from '../../lib/visuals';
+import { eta, STORE_VISUAL } from '../../lib/visuals';
+
+const CATEGORIES: StoreType[] = ['restaurant', 'grocery', 'pharmacy', 'other'];
 
 export default function Home() {
   const { user } = useAuth();
+  const tenant = useTenant();
   const [type, setType] = useState<StoreType | null>(null);
   const [search, setSearch] = useState('');
+  const [pickingAddress, setPickingAddress] = useState(false);
+  const [join, setJoin] = useState<JoinType | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { address } = useSelectedAddress();
+  const zones = useZones();
   const stores = useQuery({
     queryKey: ['catalog', 'stores'],
     queryFn: () => get<StoreSummary[]>('/catalog/stores'),
   });
+
+  const minFee = zones.data?.length ? Math.min(...zones.data.map((z) => z.deliveryFee)) : null;
+  const feeLabel = address
+    ? money(address.deliveryFee)
+    : minFee !== null
+      ? `من ${money(minFee)}`
+      : '';
 
   const visible = useMemo(() => {
     const q = search.trim();
     return (stores.data ?? [])
       .filter((s) => !type || s.type === type)
       .filter((s) => !q || s.name.includes(q))
-      .sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
+      .sort((a, b) => Number(b.isOpen) - Number(a.isOpen) || (b.rating ?? 0) - (a.rating ?? 0));
   }, [stores.data, type, search]);
+  const openNow = (stores.data ?? []).filter((s) => s.isOpen).slice(0, 8);
+
+  function pickCategory(t: StoreType | null) {
+    setType(t);
+    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   return (
-    <div className="space-y-6">
-      <section>
-        <p className="text-sm text-ink-500">
-          {greeting()}
-          {user ? `، ${user.name.split(' ')[0]}` : ''}
-        </p>
-        <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-ink-900 md:text-3xl">
-          عايز نوصّلك إيه النهارده؟
-        </h1>
-        <div className="mt-4">
-          <Input
-            icon={Search}
-            placeholder="دوّر على مطعم أو صيدلية أو محل..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="بحث"
-            className="h-13 bg-white shadow-card ring-ink-200/60"
-          />
-        </div>
-      </section>
-
-      {user && <ActiveOrderBanner />}
-
-      <section className="grid grid-cols-3 gap-3">
-        {STORE_TYPES.filter((t) => t !== 'other').map((t) => {
-          const v = STORE_VISUAL[t];
-          const active = type === t;
-          return (
-            <button
-              key={t}
-              onClick={() => setType(active ? null : t)}
-              aria-pressed={active}
-              className={cx(
-                'group flex cursor-pointer flex-col items-center gap-2 rounded-3xl p-4 transition active:scale-[0.97]',
-                active
-                  ? 'bg-ink-900 text-white shadow-lift'
-                  : 'bg-white shadow-card ring-1 ring-ink-200/60 hover:shadow-lift',
-              )}
-            >
-              <span
-                className={cx(
-                  'flex size-14 items-center justify-center rounded-2xl transition',
-                  active ? 'bg-white/10 text-white' : cx(v.tile, v.iconColor),
-                )}
+    <div className="-mx-4 -mt-5 md:mx-0 md:mt-0">
+      {/* ———— الهيدر: العنوان والبحث ———— */}
+      <section className="relative overflow-hidden rounded-b-[32px] bg-brand-800 px-4 pt-4 pb-7 text-white md:rounded-[32px] md:px-10 md:py-12">
+        <div className="absolute -top-16 -left-10 size-56 rounded-full bg-brand-600/50" />
+        <div className="absolute -right-20 -bottom-24 size-64 rounded-full bg-brand-700" />
+        <div className="absolute top-6 left-1/3 size-3 rounded-full bg-sun-400" />
+        <Art
+          name="scooter"
+          className="absolute -bottom-3 left-4 hidden size-40 -scale-x-100 md:block"
+        />
+        <div className="relative">
+          <button
+            onClick={() => (user ? setPickingAddress(true) : undefined)}
+            className="flex cursor-pointer items-center gap-1.5 text-start"
+          >
+            <MapPin className="size-5 text-sun-400" />
+            <span className="text-sm text-brand-100">التوصيل على</span>
+            <span className="max-w-[55vw] truncate font-bold">
+              {address
+                ? `${address.label}، ${address.zoneName}`
+                : user
+                  ? 'اختار عنوانك'
+                  : (tenant.data?.governorate ?? '')}
+            </span>
+            {user && <ChevronDown className="size-4" />}
+          </button>
+          <h1 className="mt-5 hidden max-w-xl text-4xl leading-tight font-bold md:block">
+            كل اللي محتاجه
+            <br />
+            <span className="text-sun-400">يوصلك لحد باب البيت</span>
+          </h1>
+          <div className="relative mt-4 md:mt-6 md:max-w-xl">
+            <Search className="pointer-events-none absolute inset-y-0 start-4 my-auto size-5 text-ink-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="دوّر على مطعم أو صيدلية أو سوبر ماركت"
+              aria-label="بحث"
+              className="h-13 w-full rounded-2xl border-0 bg-white ps-12 pe-10 text-ink-900 shadow-lift placeholder:text-ink-400 focus:ring-2 focus:ring-sun-400 focus:outline-none"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute inset-y-0 end-3 my-auto cursor-pointer text-ink-400"
+                aria-label="مسح البحث"
               >
-                <v.icon className="size-7" strokeWidth={2} />
-              </span>
-              <span className="text-sm font-semibold">{v.label}</span>
-            </button>
-          );
-        })}
+                <X className="size-5" />
+              </button>
+            )}
+          </div>
+        </div>
       </section>
 
-      <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-100">
-        <Banknote className="size-5 shrink-0" />
-        الدفع كاش عند الاستلام، ومن غير أي رسوم زيادة
-      </div>
+      <div className="space-y-8 px-4 pt-6 md:px-0">
+        {/* ———— الأقسام ———— */}
+        <section className="grid grid-cols-4 gap-2.5 md:gap-4">
+          {CATEGORIES.map((t) => {
+            const v = STORE_VISUAL[t];
+            const active = type === t;
+            return (
+              <button
+                key={t}
+                onClick={() => pickCategory(active ? null : t)}
+                aria-pressed={active}
+                className="group flex cursor-pointer flex-col items-center gap-2"
+              >
+                <span
+                  className={cx(
+                    'flex aspect-square w-full items-center justify-center rounded-3xl transition md:aspect-[4/3]',
+                    active
+                      ? 'bg-brand-100 ring-2 ring-brand-500'
+                      : 'bg-[#efe9dd] group-hover:bg-[#e8e0d0]',
+                  )}
+                >
+                  <Art
+                    name={v.art}
+                    className="size-[62%] transition group-active:scale-90 md:size-24"
+                  />
+                </span>
+                <span
+                  className={cx(
+                    'text-[13px] font-semibold md:text-base',
+                    active ? 'text-brand-700' : 'text-ink-800',
+                  )}
+                >
+                  {v.label}
+                </span>
+              </button>
+            );
+          })}
+        </section>
 
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">{type ? STORE_VISUAL[type].label : 'كل المحلات'}</h2>
-          {stores.data && <span className="text-sm text-ink-500">{num(visible.length)} محل</span>}
-        </div>
-        {stores.error && <ErrorBox error={stores.error} />}
-        {stores.isPending && (
+        {user && <ActiveOrderBanner />}
+
+        {/* ———— الإعلانات ———— */}
+        {!search && (
+          <section className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-3 md:px-0">
+            <Banner
+              tone="bg-sun-400 text-ink-900"
+              title="الدفع كاش عند الباب"
+              text="من غير كروت ولا تعقيد، ادفع للطيار لما يوصلك"
+              arts={['purse', 'coin']}
+            />
+            <Banner
+              tone="bg-orange-500 text-white"
+              title={`مطاعم ${tenant.data?.governorate ?? ''} كلها هنا`}
+              text="مشويات وبيتزا وكشري وسندوتشات"
+              cta="اطلب دلوقتي"
+              onClick={() => pickCategory('restaurant')}
+              arts={['hamburger', 'fries']}
+            />
+            <Banner
+              tone="bg-sky-500 text-white"
+              title="دواك يوصلك لحد البيت"
+              text="من أقرب صيدلية ليك وبنفس سعرها"
+              cta="الصيدليات"
+              onClick={() => pickCategory('pharmacy')}
+              arts={['pill', 'bandage']}
+            />
+          </section>
+        )}
+
+        {/* ———— مفتوح دلوقتي ———— */}
+        {!search && !type && openNow.length > 0 && (
+          <section>
+            <SectionHead title="مفتوح دلوقتي" hint="اطلب وهيوصلك بسرعة" />
+            <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+              {openNow.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/stores/${s.id}`}
+                  className="flex w-64 shrink-0 items-center gap-3 rounded-3xl bg-white p-3 shadow-card ring-1 ring-ink-200/60 transition hover:shadow-lift"
+                >
+                  <StoreLogo name={s.name} url={s.logoUrl} className="size-16 text-xl" />
+                  <div className="min-w-0">
+                    <div className="truncate font-bold">{s.name}</div>
+                    <div className="mt-0.5 flex items-center gap-1 text-sm text-ink-500">
+                      <Clock className="size-3.5" /> {eta(s.prepMinutes)}
+                    </div>
+                    {s.rating ? (
+                      <div className="flex items-center gap-1 text-sm">
+                        <Star className="size-3.5 fill-sun-400 text-sun-400" /> {num(s.rating)}
+                      </div>
+                    ) : (
+                      <div className="text-xs font-semibold text-brand-700">جديد</div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ———— كل المحلات ———— */}
+        <section ref={listRef} className="scroll-mt-20">
+          <SectionHead
+            title={search ? `نتايج "${search}"` : type ? STORE_VISUAL[type].label : 'كل المحلات'}
+            hint={stores.data ? `${num(visible.length)} محل` : undefined}
+            action={
+              type && (
+                <button
+                  onClick={() => setType(null)}
+                  className="cursor-pointer text-sm font-semibold text-brand-700"
+                >
+                  عرض الكل
+                </button>
+              )
+            }
+          />
+          {stores.error && <ErrorBox error={stores.error} />}
+          {stores.isPending && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-60 rounded-3xl" />
+              ))}
+            </div>
+          )}
+          {stores.data && visible.length === 0 && (
+            <EmptyState
+              icon={StoreIcon}
+              title="مالقيناش محلات"
+              text="جرّب تدوّر بكلمة تانية أو اختار قسم تاني"
+            />
+          )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-52 rounded-3xl" />
+            {visible.map((s) => (
+              <StoreCard key={s.id} store={s} feeLabel={feeLabel} />
             ))}
           </div>
-        )}
-        {stores.data && visible.length === 0 && (
-          <EmptyState
-            icon={StoreIcon}
-            title="مالقيناش محلات"
-            text="جرّب تدوّر بكلمة تانية أو اختار نوع تاني"
+        </section>
+
+        {/* ———— انضم لينا ———— */}
+        <section className="grid gap-4 md:grid-cols-2">
+          <JoinCard
+            art="handshake"
+            title="انضم لينا كشريك"
+            text="وصّل محلك لعملاء أكتر في محافظتك، وزوّد مبيعاتك من غير ما تشيل هم التوصيل."
+            cta="سجّل محلك"
+            onClick={() => setJoin('store')}
           />
+          <JoinCard
+            art="courier"
+            title="اشتغل طيار معانا"
+            text="شغل منتظم ومرتب ثابت، وإنت اللي بتحدد إمتى تبدأ وإمتى تقفل."
+            cta="قدّم دلوقتي"
+            onClick={() => setJoin('driver')}
+          />
+        </section>
+
+        {/* ———— المناطق ———— */}
+        {zones.data && zones.data.length > 0 && (
+          <section>
+            <SectionHead title={`المناطق اللي بنوصلها في ${tenant.data?.governorate ?? ''}`} />
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {zones.data.map((z) => (
+                <div
+                  key={z.id}
+                  className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-ink-200/60"
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <MapPin className="size-4 text-brand-600" /> {z.name}
+                  </span>
+                  <span className="text-sm text-ink-500">توصيل {money(z.deliveryFee)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((s) => (
-            <StoreCard key={s.id} store={s} />
-          ))}
+      </div>
+
+      {!user && (
+        <div className="fixed inset-x-0 bottom-[calc(4.4rem+env(safe-area-inset-bottom))] z-20 px-3 md:hidden">
+          <Link
+            to="/login"
+            state={{ from: '/' }}
+            className="flex items-center gap-3 rounded-2xl bg-brand-600 px-4 py-3 text-white shadow-lift"
+          >
+            <Art name="gift" className="size-9" />
+            <span className="flex-1 text-sm">
+              <b className="rounded-md bg-sun-400 px-1.5 py-0.5 text-ink-900">اعمل حسابك</b> واطلب
+              في ثواني
+            </span>
+            <ChevronLeft className="size-5" />
+          </Link>
         </div>
-      </section>
+      )}
+
+      <AddressSheet open={pickingAddress} onClose={() => setPickingAddress(false)} />
+      <JoinModal type={join} onClose={() => setJoin(null)} />
     </div>
   );
 }
 
-function StoreCard({ store }: { store: StoreSummary }) {
+function SectionHead({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-3">
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">{title}</h2>
+        {hint && <p className="text-sm text-ink-500">{hint}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Banner({
+  tone,
+  title,
+  text,
+  cta,
+  onClick,
+  arts,
+}: {
+  tone: string;
+  title: string;
+  text: string;
+  cta?: string;
+  onClick?: () => void;
+  arts: [string, string];
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        'relative flex h-40 w-[86%] shrink-0 snap-center cursor-pointer flex-col items-start justify-center overflow-hidden rounded-3xl p-5 text-start shadow-card md:w-auto',
+        tone,
+      )}
+    >
+      <div className="absolute -bottom-10 -left-10 size-44 rounded-full bg-white/20" />
+      <Art name={arts[0]} className="absolute bottom-2 left-3 size-24 -rotate-6" />
+      <Art name={arts[1]} className="absolute top-3 left-24 size-12 rotate-12" />
+      <div className="relative max-w-[58%]">
+        <div className="text-lg leading-snug font-bold">{title}</div>
+        <div className="mt-1 text-sm opacity-90">{text}</div>
+        {cta && (
+          <span className="mt-3 inline-block rounded-full bg-ink-900 px-3 py-1 text-xs font-semibold text-white">
+            {cta}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function StoreCard({ store, feeLabel }: { store: StoreSummary; feeLabel: string }) {
   const v = STORE_VISUAL[store.type];
   return (
     <Link
       to={`/stores/${store.id}`}
       className="group overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-ink-200/60 transition hover:-translate-y-0.5 hover:shadow-lift"
     >
-      <div className={cx('relative h-28 bg-gradient-to-br', v.cover, !store.isOpen && 'grayscale')}>
-        <v.icon className="absolute -bottom-4 left-4 size-28 text-white/25" strokeWidth={1.5} />
-        <div className="absolute start-4 bottom-0 translate-y-1/2">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-white shadow-card">
-            <v.icon className={cx('size-7', v.iconColor)} />
-          </div>
+      <div className="relative">
+        <StoreCover
+          type={store.type}
+          url={store.coverUrl}
+          closed={!store.isOpen}
+          className="h-40"
+        />
+        <div className="absolute start-4 -bottom-7">
+          <StoreLogo name={store.name} url={store.logoUrl} className="size-16 text-xl" />
         </div>
-        <span
-          className={cx(
-            'absolute end-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur',
-            store.isOpen ? 'bg-white/90 text-emerald-700' : 'bg-ink-900/70 text-white',
-          )}
-        >
-          {store.isOpen ? 'مفتوح' : 'مقفول دلوقتي'}
-        </span>
       </div>
-      <div className="px-4 pt-10 pb-4">
+      <div className="px-4 pt-9 pb-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-bold text-ink-900">{store.name}</h3>
+          <h3 className="text-[17px] font-bold text-ink-900">{store.name}</h3>
           {store.rating ? (
-            <span className="tabular flex shrink-0 items-center gap-1 text-sm font-semibold text-ink-800">
-              <Star className="size-4 fill-amber-400 text-amber-400" />
-              {num(store.rating)}
+            <span className="tabular flex shrink-0 items-center gap-1 text-sm font-semibold">
+              <Star className="size-4 fill-sun-400 text-sun-400" /> {num(store.rating)}
               <span className="font-normal text-ink-400">({num(store.ratingCount ?? 0)})</span>
             </span>
           ) : (
@@ -159,14 +407,51 @@ function StoreCard({ store }: { store: StoreSummary }) {
             </span>
           )}
         </div>
-        <div className="mt-1.5 flex items-center gap-1.5 text-sm text-ink-500">
-          <span>{v.label}</span>
-          <span className="text-ink-300">•</span>
-          <MapPin className="size-3.5" />
-          <span>{store.zoneName}</span>
+        <div className="mt-1 text-sm text-ink-500">
+          {v.label} · {store.zoneName}
+        </div>
+        <div className="mt-3 flex items-center gap-3 border-t border-ink-100 pt-3 text-sm text-ink-600">
+          <span className="flex items-center gap-1">
+            <Clock className="size-4 text-ink-400" /> {eta(store.prepMinutes)}
+          </span>
+          {feeLabel && (
+            <span className="flex items-center gap-1">
+              <Art name="scooter" className="size-5 drop-shadow-none" /> {feeLabel}
+            </span>
+          )}
         </div>
       </div>
     </Link>
+  );
+}
+
+function JoinCard({
+  art,
+  title,
+  text,
+  cta,
+  onClick,
+}: {
+  art: string;
+  title: string;
+  text: string;
+  cta: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-3xl bg-[#efe9dd] p-5">
+      <div className="min-w-0 flex-1">
+        <h3 className="text-lg font-bold">{title}</h3>
+        <p className="mt-1 text-sm text-ink-600">{text}</p>
+        <button
+          onClick={onClick}
+          className="mt-4 cursor-pointer rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-700"
+        >
+          {cta}
+        </button>
+      </div>
+      <Art name={art} className="size-24 shrink-0" />
+    </div>
   );
 }
 
@@ -179,9 +464,9 @@ function ActiveOrderBanner() {
       to={`/orders/${active.id}`}
       className="flex items-center gap-3 rounded-3xl bg-ink-900 p-4 text-white shadow-lift transition hover:bg-ink-800"
     >
-      <span className="relative flex size-11 items-center justify-center rounded-2xl bg-brand-600">
+      <span className="relative flex size-12 items-center justify-center rounded-2xl bg-brand-600">
         <span className="animate-ring absolute inset-0 rounded-2xl" />
-        <StoreIcon className="size-5" />
+        <Art name="courier" className="size-9 drop-shadow-none" />
       </span>
       <div className="flex-1">
         <div className="text-xs text-ink-300">
@@ -189,7 +474,7 @@ function ActiveOrderBanner() {
         </div>
         <div className="font-bold">{ORDER_STATUS_LABELS[active.status]}</div>
       </div>
-      <span className="flex items-center text-sm text-brand-300">
+      <span className="flex items-center text-sm text-sun-400">
         تابع <ChevronLeft className="size-4" />
       </span>
     </Link>

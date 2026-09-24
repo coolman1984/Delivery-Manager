@@ -419,7 +419,7 @@ function DriverWallet() {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader title="العهدة" subtitle="الفلوس اللي حصّلتها ولسه ماسلّمتهاش للشركة" />
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-amber-500 p-6 text-white shadow-lift">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 to-brand-500 p-6 text-white shadow-lift">
         <Wallet className="absolute -bottom-6 -left-4 size-36 text-white/15" strokeWidth={1.4} />
         <div className="relative">
           <div className="text-sm text-white/80">معاك دلوقتي</div>

@@ -33,10 +33,12 @@ import {
 import { get, patch, post } from '../../lib/api';
 import { dateTime, num, toPiasters } from '../../lib/format';
 import type { Zone } from '../../lib/types';
-import { STORE_VISUAL } from '../../lib/visuals';
+import { ImagePicker } from '../../components/ImagePicker';
+import { StoreLogo } from '../../components/visual';
 
 interface AdminStore {
   id: string;
+  logoUrl: string | null;
   name: string;
   type: StoreType;
   zoneId: string;
@@ -59,7 +61,7 @@ interface AuditRow {
   createdAt: string;
 }
 
-type Tab = 'zones' | 'stores' | 'users' | 'audit';
+type Tab = 'zones' | 'stores' | 'users' | 'leads' | 'audit';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('zones');
@@ -77,12 +79,14 @@ export default function Admin() {
           { value: 'zones', label: 'المناطق' },
           { value: 'stores', label: 'المحلات' },
           { value: 'users', label: 'الموظفين' },
+          { value: 'leads', label: 'طلبات الانضمام' },
           { value: 'audit', label: 'سجل العمليات' },
         ]}
       />
       {tab === 'zones' && <Zones />}
       {tab === 'stores' && <Stores />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'leads' && <Leads />}
       {tab === 'audit' && <Audit />}
     </div>
   );
@@ -209,6 +213,7 @@ function Zones() {
 
 // ———— المحلات ————
 function Stores() {
+  const queryClient = useQueryClient();
   const stores = useQuery({
     queryKey: ['admin-stores'],
     queryFn: () => get<AdminStore[]>('/admin/stores'),
@@ -253,17 +258,17 @@ function Stores() {
         }
       >
         {stores.data.map((s) => {
-          const v = STORE_VISUAL[s.type];
           return (
             <div key={s.id} className="flex items-center gap-4 px-5 py-3.5">
-              <span
-                className={cx(
-                  'flex size-10 shrink-0 items-center justify-center rounded-xl',
-                  v.tile,
-                )}
+              <ImagePicker
+                path={`/admin/stores/${s.id}/logo`}
+                label={`لوجو ${s.name}`}
+                onUploaded={() =>
+                  void queryClient.invalidateQueries({ queryKey: ['admin-stores'] })
+                }
               >
-                <v.icon className={cx('size-5', v.iconColor)} />
-              </span>
+                <StoreLogo name={s.name} url={s.logoUrl} className="size-12 text-lg" />
+              </ImagePicker>
               <div className="min-w-0 flex-1">
                 <div className={cx('font-medium', !s.isActive && 'text-ink-400 line-through')}>
                   {s.name}
@@ -645,6 +650,58 @@ function Audit() {
           <span className="text-xs text-ink-300" dir="ltr">
             {l.ip}
           </span>
+        </div>
+      ))}
+    </TableCard>
+  );
+}
+
+// ———— طلبات الانضمام ————
+interface Lead {
+  id: string;
+  type: 'store' | 'driver';
+  name: string;
+  phone: string;
+  details: string | null;
+  handled: boolean;
+  createdAt: string;
+}
+
+function Leads() {
+  const leads = useQuery({ queryKey: ['admin-leads'], queryFn: () => get<Lead[]>('/admin/leads') });
+  const saver = useSaver('admin-leads');
+  const done = useMutation({
+    mutationFn: (id: string) => patch(`/admin/leads/${id}/handled`),
+    ...saver,
+  });
+  if (leads.isPending) return <SkeletonList count={3} className="h-16" />;
+  if (leads.error) return <ErrorBox error={leads.error} />;
+  return (
+    <TableCard title="محلات وطيارين عايزين يشتغلوا معاك" icon={UserPlus}>
+      {leads.data.length === 0 && (
+        <p className="px-5 py-8 text-center text-sm text-ink-500">لسه مفيش طلبات</p>
+      )}
+      {leads.data.map((l) => (
+        <div
+          key={l.id}
+          className={cx('flex flex-wrap items-center gap-3 px-5 py-3.5', l.handled && 'opacity-50')}
+        >
+          <Badge tone={l.type === 'store' ? 'brand' : 'success'}>
+            {l.type === 'store' ? 'محل' : 'طيار'}
+          </Badge>
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">{l.name}</div>
+            {l.details && <div className="text-sm text-ink-500">{l.details}</div>}
+            <div className="text-xs text-ink-400">{dateTime(l.createdAt)}</div>
+          </div>
+          <a href={`tel:${l.phone}`} className="text-sm font-semibold text-brand-700" dir="ltr">
+            {l.phone}
+          </a>
+          {!l.handled && (
+            <Button size="sm" variant="secondary" onClick={() => done.mutate(l.id)}>
+              اتواصلت معاه
+            </Button>
+          )}
         </div>
       ))}
     </TableCard>

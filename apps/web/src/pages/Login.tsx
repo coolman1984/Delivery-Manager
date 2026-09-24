@@ -47,9 +47,25 @@ export default function Login() {
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-2">
       {/* الجزء التعريفي */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-500 to-amber-400 px-6 pt-10 pb-20 text-white lg:flex lg:flex-col lg:justify-center lg:px-16 lg:pb-10">
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-brand-500 px-6 pt-10 pb-20 text-white lg:flex lg:flex-col lg:justify-center lg:px-16 lg:pb-10">
         <div className="absolute -top-24 -left-24 size-72 rounded-full bg-white/10" />
         <div className="absolute -right-16 -bottom-28 size-80 rounded-full bg-white/10" />
+        <div className="absolute top-8 left-1/3 size-3 rounded-full bg-sun-400" />
+        <img
+          src="/art/hamburger.webp"
+          alt=""
+          className="absolute top-6 left-4 size-20 -rotate-12 drop-shadow-xl lg:top-16 lg:left-16 lg:size-32"
+        />
+        <img
+          src="/art/pill.webp"
+          alt=""
+          className="absolute top-28 left-20 size-12 rotate-12 drop-shadow-lg lg:top-56 lg:left-52 lg:size-20"
+        />
+        <img
+          src="/art/basket.webp"
+          alt=""
+          className="absolute bottom-16 left-6 hidden size-28 drop-shadow-xl lg:block lg:bottom-24 lg:left-24 lg:size-36"
+        />
         <div className="relative mx-auto max-w-md lg:mx-0">
           <BrandMark glass className="size-14" />
           <h1 className="mt-6 text-3xl leading-snug font-bold lg:text-4xl">

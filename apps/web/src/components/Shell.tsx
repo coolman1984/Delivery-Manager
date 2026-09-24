@@ -2,7 +2,7 @@ import { ROLE_LABELS } from '@dm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Bike, KeyRound, LogOut, type LucideIcon } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import { get, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { num } from '../lib/format';
@@ -111,9 +111,16 @@ function BottomNav({ nav }: { nav: NavItem[] }) {
 /** إطار تطبيق العميل: شريط علوي بسيط + قائمة سفلية زي تطبيقات الموبايل */
 export function CustomerShell({ nav, children }: { nav: NavItem[]; children: ReactNode }) {
   useRealtime();
+  const { pathname } = useLocation();
+  const tenant = useTenant();
   return (
-    <div className="min-h-dvh pb-24 md:pb-10">
-      <header className="sticky top-0 z-30 border-b border-ink-200/60 bg-canvas/90 backdrop-blur">
+    <div className="min-h-dvh pb-24 md:pb-0">
+      <header
+        className={cx(
+          'sticky top-0 z-30 border-b border-ink-200/60 bg-white/90 backdrop-blur',
+          pathname === '/' && 'hidden md:block',
+        )}
+      >
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4">
           <Brand />
           <nav className="hidden items-center gap-1 md:flex">
@@ -143,7 +150,36 @@ export function CustomerShell({ nav, children }: { nav: NavItem[]; children: Rea
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-5 md:py-8">{children}</main>
+      <footer className="mt-10 hidden bg-ink-900 text-ink-400 md:block">
+        <div className="mx-auto grid max-w-6xl grid-cols-3 gap-8 px-4 py-10 text-sm">
+          <div>
+            <Brand dark />
+            <p className="mt-3 leading-relaxed">
+              توصيل طلبات من المطاعم والصيدليات والسوبر ماركت في{' '}
+              {tenant.data?.governorate ?? 'محافظتك'}، والدفع كاش عند الباب.
+            </p>
+          </div>
+          <div>
+            <div className="mb-3 font-semibold text-white">اطلب</div>
+            <ul className="space-y-2">
+              <li>مطاعم</li>
+              <li>سوبر ماركت</li>
+              <li>صيدليات</li>
+            </ul>
+          </div>
+          <div>
+            <div className="mb-3 font-semibold text-white">اشتغل معانا</div>
+            <ul className="space-y-2">
+              <li>سجّل محلك كشريك</li>
+              <li>اشتغل طيار</li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-white/10 py-4 text-center text-xs">
+          © {new Date().getFullYear()} {tenant.data?.name ?? ''}
+        </div>
+      </footer>
       <BottomNav nav={nav} />
     </div>
   );

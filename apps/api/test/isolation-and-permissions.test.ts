@@ -43,6 +43,18 @@ describe('🧱 عزل الشركات', () => {
     await app.close();
   });
 
+  it('كل جدول فيه ختم شركة عليه حيطان العزل (حماية من نسيان جدول جديد)', async () => {
+    const rows = await ownerQuery<{ table_name: string; rls: boolean; forced: boolean }>(`
+      select c.relname as table_name, c.relrowsecurity as rls, c.relforcerowsecurity as forced
+      from information_schema.columns col
+      join pg_class c on c.relname = col.table_name and c.relkind = 'r'
+      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+      where col.table_schema = 'public' and col.column_name = 'tenant_id'`);
+    expect(rows.length).toBeGreaterThan(10);
+    const unprotected = rows.filter((r) => !r.rls || !r.forced).map((r) => r.table_name);
+    expect(unprotected).toEqual([]);
+  });
+
   it('مدير تشغيل بني سويف مايشوفش طلب من الفيوم حتى لو عرف رقمه', async () => {
     expect((await bsOps.get(`/orders/${fyOrderId}`)).status).toBe(404);
     expect(

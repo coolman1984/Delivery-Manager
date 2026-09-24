@@ -116,6 +116,10 @@ export const stores = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     lat: doublePrecision('lat'),
     lng: doublePrecision('lng'),
+    logoUrl: text('logo_url'),
+    coverUrl: text('cover_url'),
+    // متوسط وقت تحضير الطلب بالدقايق (بيتحسب منه الوقت المتوقع للتوصيل)
+    prepMinutes: integer('prep_minutes').notNull().default(20),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -209,6 +213,7 @@ export const products = pgTable(
     description: text('description'),
     category: text('category'),
     price: integer('price').notNull(),
+    imageUrl: text('image_url'),
     isAvailable: boolean('is_available').notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -421,4 +426,21 @@ export const auditLogs = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('audit_logs_tenant_created_idx').on(t.tenantId, t.createdAt)],
+);
+
+// ———— طلبات الانضمام (محلات وطيارين عايزين يشتغلوا معانا) ————
+export const leadTypeEnum = pgEnum('lead_type', ['store', 'driver']);
+export const leads = pgTable(
+  'leads',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    type: leadTypeEnum('type').notNull(),
+    name: text('name').notNull(),
+    phone: text('phone').notNull(),
+    details: text('details'),
+    handled: boolean('handled').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index('leads_tenant_idx').on(t.tenantId, t.createdAt)],
 );

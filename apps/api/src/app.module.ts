@@ -13,6 +13,8 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { LeadsModule } from './modules/leads/leads.module';
+import { MediaModule } from './modules/media/media.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
@@ -44,6 +46,8 @@ class HealthController {
     DriversModule,
     FinanceModule,
     AdminModule,
+    MediaModule,
+    LeadsModule,
   ],
   controllers: [HealthController],
   providers: [

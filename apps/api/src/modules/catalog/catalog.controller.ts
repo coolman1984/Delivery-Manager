@@ -45,6 +45,9 @@ export class CatalogController {
           type: stores.type,
           isOpen: stores.isOpen,
           zoneName: zones.name,
+          logoUrl: stores.logoUrl,
+          coverUrl: stores.coverUrl,
+          prepMinutes: stores.prepMinutes,
           rating: ratingAvg,
           ratingCount,
         })
@@ -65,6 +68,9 @@ export class CatalogController {
           type: stores.type,
           isOpen: stores.isOpen,
           address: stores.address,
+          logoUrl: stores.logoUrl,
+          coverUrl: stores.coverUrl,
+          prepMinutes: stores.prepMinutes,
           rating: ratingAvg,
           ratingCount,
         })
@@ -79,6 +85,7 @@ export class CatalogController {
           description: products.description,
           category: products.category,
           price: products.price,
+          imageUrl: products.imageUrl,
         })
         .from(products)
         .where(and(eq(products.storeId, id), eq(products.isAvailable, true)))

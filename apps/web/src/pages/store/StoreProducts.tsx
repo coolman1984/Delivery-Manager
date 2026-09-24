@@ -18,6 +18,87 @@ import {
 import { get, patch, post } from '../../lib/api';
 import { num, toPiasters } from '../../lib/format';
 import type { Product } from '../../lib/types';
+import { ImagePicker } from '../../components/ImagePicker';
+import { ProductImage, StoreCover, StoreLogo } from '../../components/visual';
+import type { StoreType } from '@dm/shared';
+
+interface StoreMe {
+  id: string;
+  name: string;
+  type: StoreType;
+  prepMinutes: number;
+  logoUrl: string | null;
+  coverUrl: string | null;
+}
+
+/** شكل المحل عند العملاء: اللوجو والغلاف ووقت التحضير */
+function StoreSettings() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const dialog = useDialog();
+  const me = useQuery({ queryKey: ['store-me'], queryFn: () => get<StoreMe>('/store/me') });
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ['store-me'] });
+  const prep = useMutation({
+    mutationFn: (prepMinutes: number) => patch('/store/me/prep', { prepMinutes }),
+    onSuccess: () => {
+      toast('اتحفظ');
+      refresh();
+    },
+    onError: (e) => toast(e.message, 'error'),
+  });
+  if (!me.data) return null;
+  const s = me.data;
+
+  async function editPrep() {
+    const v = await dialog.prompt({
+      title: 'وقت تحضير الطلب',
+      description: 'متوسط الوقت اللي بتاخده عشان تجهّز الطلب. بيظهر للعميل كوقت متوقع للتوصيل.',
+      label: 'بالدقايق',
+      defaultValue: String(s.prepMinutes),
+      inputMode: 'numeric',
+      validate: (x) =>
+        Number.isInteger(Number(x)) && Number(x) >= 5 && Number(x) <= 180
+          ? null
+          : 'من ٥ لـ ١٨٠ دقيقة',
+    });
+    if (v) prep.mutate(Number(v));
+  }
+
+  return (
+    <Card padded={false} className="mb-6 overflow-hidden">
+      <ImagePicker
+        path="/store/me/cover"
+        label="تغيير الغلاف"
+        onUploaded={refresh}
+        className="block w-full"
+      >
+        <StoreCover type={s.type} url={s.coverUrl} className="h-36" />
+      </ImagePicker>
+      <div className="flex flex-wrap items-center gap-4 px-5 pb-4">
+        <ImagePicker
+          path="/store/me/logo"
+          label="تغيير اللوجو"
+          onUploaded={refresh}
+          className="-mt-8"
+        >
+          <StoreLogo name={s.name} url={s.logoUrl} className="size-20 text-2xl" />
+        </ImagePicker>
+        <div className="min-w-48 flex-1 pt-2">
+          <div className="font-bold">شكل محلك عند العملاء</div>
+          <div className="text-sm text-ink-500">دوس على الغلاف أو اللوجو عشان تغيّرهم</div>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full sm:w-auto"
+          onClick={() => void editPrep()}
+        >
+          وقت التحضير: {num(s.prepMinutes)} دقيقة
+        </Button>
+      </div>
+    </Card>
+  );
+}
 
 export default function StoreProducts() {
   const products = useQuery({
@@ -52,6 +133,7 @@ export default function StoreProducts() {
           </Button>
         }
       />
+      <StoreSettings />
       <div className="mb-5 max-w-md">
         <Input
           icon={Search}
@@ -122,6 +204,13 @@ function ProductRow({ product }: { product: Product }) {
 
   return (
     <div className="flex items-center gap-4 px-5 py-3.5">
+      <ImagePicker
+        path={`/store/products/${product.id}/image`}
+        label={`صورة ${product.name}`}
+        onUploaded={() => void queryClient.invalidateQueries({ queryKey: ['store-products'] })}
+      >
+        <ProductImage url={product.imageUrl} name={product.name} className="size-16" />
+      </ImagePicker>
       <div className="min-w-0 flex-1">
         <div className={cx('font-semibold', !product.isAvailable && 'text-ink-400 line-through')}>
           {product.name}

@@ -94,3 +94,33 @@ export const get = <T>(path: string) => api<T>('GET', path);
 export const post = <T>(path: string, body?: unknown) => api<T>('POST', path, body ?? {});
 export const patch = <T>(path: string, body?: unknown) => api<T>('PATCH', path, body ?? {});
 export const del = <T>(path: string) => api<T>('DELETE', path);
+
+/** رفع صورة (لوجو أو غلاف أو صورة منتج) */
+export async function uploadImage(path: string, file: File): Promise<{ url: string }> {
+  if (file.size > 4 * 1024 * 1024) throw new ApiError(400, 'الصورة لازم تكون أقل من ٤ ميجا');
+  const send = () => {
+    const form = new FormData();
+    form.append('image', file);
+    const headers: Record<string, string> = {
+      'x-tenant': getTenantSlug(),
+      'x-requested-with': 'dm',
+    };
+    if (accessToken) headers.authorization = `Bearer ${accessToken}`;
+    return fetch(`/api/v1${path}`, {
+      method: 'POST',
+      body: form,
+      headers,
+      credentials: 'same-origin',
+    });
+  };
+  let res: Response;
+  try {
+    res = await send();
+    if (res.status === 401 && (await refreshSession())) res = await send();
+  } catch {
+    throw new ApiError(0, OFFLINE_MESSAGE);
+  }
+  const data = (await res.json().catch(() => ({}))) as { url?: string; message?: string };
+  if (!res.ok || !data.url) throw new ApiError(res.status, data.message ?? 'رفع الصورة فشل');
+  return { url: data.url };
+}

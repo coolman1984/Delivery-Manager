@@ -21,10 +21,11 @@ interface TenantSeed {
   zones: Array<[string, number]>;
   stores: Array<{
     name: string;
-    type: 'restaurant' | 'pharmacy' | 'grocery';
+    type: 'restaurant' | 'pharmacy' | 'grocery' | 'other';
     zone: number;
     commissionBps: number;
-    products: Array<[string, string, number]>;
+    products: Array<[string, string, number, string]>;
+    prepMinutes?: number;
   }>;
   drivers: string[];
   customers: string[];
@@ -50,12 +51,12 @@ const TENANTS: TenantSeed[] = [
         zone: 0,
         commissionBps: 1200,
         products: [
-          ['نص فرخة مشوية', 'مشويات', 12000],
-          ['كفتة ربع كيلو', 'مشويات', 11000],
-          ['طبق رز', 'أطباق جانبية', 2500],
-          ['سلطة بلدي', 'أطباق جانبية', 1500],
-          ['طحينة', 'أطباق جانبية', 1500],
-          ['كانز', 'مشروبات', 1500],
+          ['نص فرخة مشوية', 'مشويات', 12000, 'chicken'],
+          ['كفتة ربع كيلو', 'مشويات', 11000, 'meat'],
+          ['طبق رز', 'أطباق جانبية', 2500, 'rice'],
+          ['سلطة بلدي', 'أطباق جانبية', 1500, 'salad'],
+          ['طحينة', 'أطباق جانبية', 1500, 'canned'],
+          ['كانز', 'مشروبات', 1500, 'drink'],
         ],
       },
       {
@@ -64,10 +65,10 @@ const TENANTS: TenantSeed[] = [
         zone: 1,
         commissionBps: 500,
         products: [
-          ['بنادول أدفانس ٢٤ قرص', 'مسكنات', 7200],
-          ['كمامات ١٠ قطع', 'مستلزمات', 2500],
-          ['كحول ١٢٥ مل', 'مستلزمات', 2000],
-          ['فيتامين سي فوار', 'فيتامينات', 4500],
+          ['بنادول أدفانس ٢٤ قرص', 'مسكنات', 7200, 'pill'],
+          ['كمامات ١٠ قطع', 'مستلزمات', 2500, 'mask'],
+          ['كحول ١٢٥ مل', 'مستلزمات', 2000, 'lotion'],
+          ['فيتامين سي فوار', 'فيتامينات', 4500, 'apple'],
         ],
       },
       {
@@ -76,12 +77,49 @@ const TENANTS: TenantSeed[] = [
         zone: 2,
         commissionBps: 800,
         products: [
-          ['لبن كامل الدسم ١ لتر', 'ألبان', 4200],
-          ['جبنة بيضا ٥٠٠ جم', 'ألبان', 6000],
-          ['عيش فينو ٥ قطع', 'مخبوزات', 1000],
-          ['رز مصري ١ كيلو', 'بقالة', 3800],
-          ['زيت ١ لتر', 'بقالة', 8500],
-          ['سكر ١ كيلو', 'بقالة', 3500],
+          ['لبن كامل الدسم ١ لتر', 'ألبان', 4200, 'milk'],
+          ['جبنة بيضا ٥٠٠ جم', 'ألبان', 6000, 'cheese'],
+          ['عيش فينو ٥ قطع', 'مخبوزات', 1000, 'bread'],
+          ['رز مصري ١ كيلو', 'بقالة', 3800, 'rice'],
+          ['زيت ١ لتر', 'بقالة', 8500, 'oil'],
+          ['سكر ١ كيلو', 'بقالة', 3500, 'canned'],
+        ],
+      },
+      {
+        name: 'بيتزا الأصدقاء',
+        type: 'restaurant',
+        zone: 0,
+        commissionBps: 1200,
+        prepMinutes: 25,
+        products: [
+          ['بيتزا مارجريتا وسط', 'بيتزا', 9500, 'pizza'],
+          ['بيتزا خضار وسط', 'بيتزا', 10500, 'pizza'],
+          ['بطاطس محمرة', 'إضافات', 3000, 'fries'],
+          ['كوكاكولا', 'مشروبات', 1500, 'drink'],
+        ],
+      },
+      {
+        name: 'سندوتشات الريس',
+        type: 'restaurant',
+        zone: 1,
+        commissionBps: 1000,
+        prepMinutes: 15,
+        products: [
+          ['سندوتش شاورما فراخ', 'سندوتشات', 5500, 'sandwich'],
+          ['برجر لحمة', 'سندوتشات', 7500, 'hamburger'],
+          ['بطاطس كبيرة', 'إضافات', 3500, 'fries'],
+        ],
+      },
+      {
+        name: 'حلواني الشرق',
+        type: 'other',
+        zone: 2,
+        commissionBps: 1000,
+        prepMinutes: 10,
+        products: [
+          ['بسبوسة ربع كيلو', 'حلويات شرقي', 4000, 'cookie'],
+          ['آيس كريم فانيليا', 'آيس كريم', 3000, 'icecream'],
+          ['تورتة شوكولاتة صغيرة', 'تورت', 18000, 'gift'],
         ],
       },
     ],
@@ -107,10 +145,10 @@ const TENANTS: TenantSeed[] = [
         zone: 0,
         commissionBps: 1000,
         products: [
-          ['كشري وسط', 'كشري', 3000],
-          ['كشري كبير', 'كشري', 4000],
-          ['أرز باللبن', 'حلويات', 2000],
-          ['صوص زيادة', 'إضافات', 500],
+          ['كشري وسط', 'كشري', 3000, 'pot'],
+          ['كشري كبير', 'كشري', 4000, 'pot'],
+          ['أرز باللبن', 'حلويات', 2000, 'icecream'],
+          ['صوص زيادة', 'إضافات', 500, 'tomato'],
         ],
       },
       {
@@ -119,9 +157,9 @@ const TENANTS: TenantSeed[] = [
         zone: 3,
         commissionBps: 500,
         products: [
-          ['بروفين ٤٠٠', 'مسكنات', 3900],
-          ['قطن طبي', 'مستلزمات', 1500],
-          ['شاش ولاصق', 'مستلزمات', 1800],
+          ['بروفين ٤٠٠', 'مسكنات', 3900, 'pill'],
+          ['قطن طبي', 'مستلزمات', 1500, 'bandage'],
+          ['شاش ولاصق', 'مستلزمات', 1800, 'bandage'],
         ],
       },
       {
@@ -130,10 +168,22 @@ const TENANTS: TenantSeed[] = [
         zone: 1,
         commissionBps: 700,
         products: [
-          ['بيض ١٠ حبات', 'بقالة', 5500],
-          ['مكرونة ٤٠٠ جم', 'بقالة', 1400],
-          ['شاي ٢٥٠ جم', 'بقالة', 6500],
-          ['مية معدنية ١٫٥ لتر', 'مشروبات', 900],
+          ['بيض ١٠ حبات', 'بقالة', 5500, 'egg'],
+          ['مكرونة ٤٠٠ جم', 'بقالة', 1400, 'pasta'],
+          ['شاي ٢٥٠ جم', 'بقالة', 6500, 'tea'],
+          ['مية معدنية ١٫٥ لتر', 'مشروبات', 900, 'water'],
+        ],
+      },
+      {
+        name: 'فطاطري الفيوم',
+        type: 'restaurant',
+        zone: 3,
+        commissionBps: 1000,
+        prepMinutes: 20,
+        products: [
+          ['فطير مشلتت', 'فطير', 6000, 'bread'],
+          ['فطيرة جبنة', 'فطير', 5000, 'cheese'],
+          ['شاي بلبن', 'مشروبات', 1500, 'tea'],
         ],
       },
     ],
@@ -198,15 +248,17 @@ async function seedTenant(db: Db, t: TenantSeed, passwordHash: string): Promise<
           address: `${zoneRows[s.zone]!.name} — الشارع الرئيسي`,
           phone: phone(40 + i),
           commissionBps: s.commissionBps,
+          prepMinutes: s.prepMinutes ?? 20,
         })
         .returning();
       await tx.insert(products).values(
-        s.products.map(([name, category, price]) => ({
+        s.products.map(([name, category, price, art]) => ({
           tenantId,
           storeId: store!.id,
           name,
           category,
           price,
+          imageUrl: `/art/${art}.webp`,
         })),
       );
       await tx.insert(users).values({

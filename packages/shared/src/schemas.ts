@@ -87,11 +87,13 @@ export const storeCreateSchema = z.strictObject({
   address: shortText,
   phone: phoneSchema,
   commissionBps: z.number().int().min(0).max(5000),
+  prepMinutes: z.number().int().min(5).max(180).optional(),
   isActive: z.boolean().default(true),
 });
 export const storeUpdateSchema = storeCreateSchema.partial();
 
 export const storeOpenSchema = z.strictObject({ isOpen: z.boolean() });
+export const storePrepSchema = z.strictObject({ prepMinutes: z.number().int().min(5).max(180) });
 
 export const productCreateSchema = z.strictObject({
   name,
@@ -208,3 +210,12 @@ export type ResolveCashDiffInput = z.infer<typeof resolveCashDiffSchema>;
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+// ———— طلبات الانضمام ————
+export const leadCreateSchema = z.strictObject({
+  type: z.enum(['store', 'driver']),
+  name,
+  phone: phoneSchema,
+  details: shortText.optional(),
+});
+export type LeadCreateInput = z.infer<typeof leadCreateSchema>;

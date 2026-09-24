@@ -12,3 +12,6 @@ coverage/
 *.key
 backups/
 !.env.production.example
+media/
+dump.rdb
+*.rdb

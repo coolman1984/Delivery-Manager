@@ -17,16 +17,27 @@ export default defineConfig({
         description: 'اطلب من مطاعم وصيدليات وبقالة محافظتك',
         lang: 'ar',
         dir: 'rtl',
-        theme_color: '#0f766e',
-        background_color: '#f8fafc',
+        theme_color: '#08583b',
+        background_color: '#f7f5f0',
         display: 'standalone',
         start_url: '/',
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
       },
       workbox: {
+        // الرسومات مش بتتحمل مع أول فتحة، بتتحمل لما تظهر وتتحفظ بعدها
+        globIgnores: ['art/**', 'assets/*vietnamese*', 'assets/*latin-ext*'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/art/') || url.pathname.startsWith('/api/v1/media/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images',
+              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 86_400 },
+            },
+          },
           {
             // صفحات المحلات والمنتجات: بنعرض آخر نسخة محفوظة لو النت فصل
             urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/catalog/'),

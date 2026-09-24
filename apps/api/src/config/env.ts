@@ -23,6 +23,8 @@ const envSchema = z
     DATA_ENCRYPTION_KEY: z
       .string()
       .regex(/^[0-9a-f]{64}$/i, 'DATA_ENCRYPTION_KEY لازم يكون 64 حرف hex'),
+    // فولدر الصور المرفوعة (صور المحلات والمنتجات)
+    MEDIA_DIR: z.string().default('./media'),
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     SMS_PROVIDER: z.enum(['console']).default('console'),
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),

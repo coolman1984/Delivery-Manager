@@ -11,6 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { AppRequest, AuthUser } from './auth-context';
 import { IS_PUBLIC, ROLES_KEY } from './decorators';
+import { RevocationService } from './revocation.service';
 import { TenantsService } from './tenants.service';
 
 const SUSPENDED = 'الخدمة متوقفة مؤقتاً. كلّم إدارة الشركة';
@@ -20,6 +21,7 @@ interface AccessPayload {
   tid: string;
   role: Role;
   sid?: string | null;
+  ims?: number;
 }
 
 /**
@@ -35,6 +37,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly tenants: TenantsService,
+    private readonly revocation: RevocationService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -85,6 +88,7 @@ export class AuthGuard implements CanActivate {
     try {
       const payload = await this.jwt.verifyAsync<AccessPayload>(token, { algorithms: ['HS256'] });
       if (!ALL_ROLES.includes(payload.role)) throw new Error('bad role');
+      if (await this.revocation.isRevoked(payload.sub, payload.ims)) throw new Error('revoked');
       return {
         userId: payload.sub,
         tenantId: payload.tid,

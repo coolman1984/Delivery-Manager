@@ -5,6 +5,7 @@ import { CryptoService } from './crypto.service';
 import { DbService } from './db.service';
 import { RateLimitService } from './rate-limit.service';
 import { RedisService } from './redis.service';
+import { RevocationService } from './revocation.service';
 import { TenantsService } from './tenants.service';
 
 @Global()
@@ -17,6 +18,7 @@ import { TenantsService } from './tenants.service';
     CryptoService,
     AuditService,
     TenantsService,
+    RevocationService,
   ],
   exports: [
     ENV,
@@ -26,6 +28,7 @@ import { TenantsService } from './tenants.service';
     CryptoService,
     AuditService,
     TenantsService,
+    RevocationService,
   ],
 })
 export class CommonModule {}

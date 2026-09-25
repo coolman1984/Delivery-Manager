@@ -20,6 +20,7 @@ import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../config/env';
 import { CryptoService } from '../../common/crypto.service';
 import type { Tx } from '../../common/db.service';
+import { RevocationService } from '../../common/revocation.service';
 import { TenantsService } from '../../common/tenants.service';
 import {
   plans,
@@ -74,6 +75,7 @@ export class PlatformService implements OnApplicationBootstrap, OnModuleDestroy 
     private readonly pdb: PlatformDbService,
     private readonly crypto: CryptoService,
     private readonly tenantsCache: TenantsService,
+    private readonly revocation: RevocationService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -317,6 +319,7 @@ export class PlatformService implements OnApplicationBootstrap, OnModuleDestroy 
         .update(refreshTokens)
         .set({ revokedAt: new Date() })
         .where(and(eq(refreshTokens.userId, admin.id), isNull(refreshTokens.revokedAt)));
+      await this.revocation.revokeUser(admin.id);
       await this.log(tx, actor, 'tenant.admin_password_reset', tenantId, { userId: admin.id });
       return { phone: admin.phone, password };
     });

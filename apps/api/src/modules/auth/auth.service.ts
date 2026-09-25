@@ -22,6 +22,7 @@ import { AuditService } from '../../common/audit.service';
 import type { RequestMeta, TenantInfo } from '../../common/auth-context';
 import { CryptoService } from '../../common/crypto.service';
 import { DbService, Tx } from '../../common/db.service';
+import { RevocationService } from '../../common/revocation.service';
 import { RateLimitService } from '../../common/rate-limit.service';
 import { RedisService } from '../../common/redis.service';
 import { ENV, type Env } from '../../config/env';
@@ -71,6 +72,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     @Inject(ENV) private readonly env: Env,
     @Inject(SMS_PROVIDER) private readonly sms: SmsProvider,
+    private readonly revocation: RevocationService,
   ) {
     // بنستخدمه عشان وقت الرد يبقى واحد سواء الرقم متسجل أو لأ (منع تخمين الأرقام المسجلة)
     this.dummyHash = argon2.hash(this.crypto.randomToken(), ARGON2_OPTIONS);
@@ -308,6 +310,7 @@ export class AuthService {
       if (row.revokedAt) {
         // توكن اتستخدم قبل كده = غالباً اتسرق. نقفل كل جلسات العيلة دي فوراً
         await this.revokeFamily(tx, row.familyId);
+        await this.revocation.revokeUser(row.userId);
         await this.audit.log(tx, {
           tenantId,
           actorId: row.userId,
@@ -395,6 +398,7 @@ export class AuthService {
       return true;
     });
     if (!ok) throw new BadRequestException('كلمة السر الحالية غلط');
+    await this.revocation.revokeUser(userId);
   }
 
   async me(tenantId: string, userId: string): Promise<SessionUser> {
@@ -415,7 +419,8 @@ export class AuthService {
     familyId?: string,
   ): Promise<IssuedSession> {
     const accessToken = await this.jwt.signAsync(
-      { sub: user.id, tid: user.tenantId, role: user.role, sid: user.storeId },
+      // ims: وقت الإصدار بالملي ثانية (عشان القفل الفوري يفرق بين توكن قبل القفل وبعده بالظبط)
+      { sub: user.id, tid: user.tenantId, role: user.role, sid: user.storeId, ims: Date.now() },
       { algorithm: 'HS256', expiresIn: this.env.ACCESS_TOKEN_TTL_SECONDS },
     );
     const refreshToken = `${user.tenantId}.${this.crypto.randomToken(32)}`;

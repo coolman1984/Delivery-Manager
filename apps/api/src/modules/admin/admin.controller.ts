@@ -31,6 +31,7 @@ import { z } from 'zod';
 import { AuditService } from '../../common/audit.service';
 import type { Actor } from '../../common/auth-context';
 import { CryptoService } from '../../common/crypto.service';
+import { RevocationService } from '../../common/revocation.service';
 import { DbService, Tx } from '../../common/db.service';
 import { CurrentActor, Roles } from '../../common/decorators';
 import { ZodPipe } from '../../common/zod.pipe';
@@ -60,6 +61,7 @@ export class AdminController {
     private readonly dbs: DbService,
     private readonly audit: AuditService,
     private readonly crypto: CryptoService,
+    private readonly revocation: RevocationService,
   ) {}
 
   // ———— المناطق ————
@@ -244,6 +246,7 @@ export class AdminController {
           .set({ revokedAt: new Date() })
           .where(and(eq(refreshTokens.userId, id), isNull(refreshTokens.revokedAt)));
       }
+      if (body.isActive === false || passwordHash) await this.revocation.revokeUser(id);
       await this.log(tx, actor, passwordHash ? 'user.password_reset' : 'user.updated', 'user', id, {
         fields: Object.keys(rest),
       });

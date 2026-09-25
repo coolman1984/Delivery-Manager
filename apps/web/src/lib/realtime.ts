@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { useToast } from '../components/toast';
-import { getAccessToken } from './api';
+import { getAccessToken, refreshSession } from './api';
 import { useAuth } from './auth';
 import { orderNo } from './format';
 
@@ -46,6 +46,11 @@ export function useRealtime(): void {
       transports: ['websocket', 'polling'],
       auth: (cb) => cb({ token: getAccessToken() }),
       reconnectionDelayMax: 10_000,
+    });
+    // السيرفر قفل الاتصال (التوكن خلص): نجدد الجلسة ونرجع نتصل
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io server disconnect') return;
+      void refreshSession().then((ok) => ok && socket.connect());
     });
     socket.on('order.updated', (e: { id: string; number: number; status: OrderStatus }) => {
       void queryClient.invalidateQueries({ queryKey: ['orders'] });
